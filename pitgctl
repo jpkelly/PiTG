@@ -10,6 +10,7 @@ usage() {
     cat <<'EOF'
 Usage:
   pitgctl show
+  pitgctl list-devices
   pitgctl status
   pitgctl logs
   pitgctl start
@@ -21,6 +22,7 @@ Usage:
   pitgctl set-start <HH:MM:SS:FF>
   pitgctl clear-start
   pitgctl set-opts "<full pitg option string>"
+  pitgctl set-defaults
 EOF
 }
 
@@ -154,10 +156,50 @@ validate_start() {
     }
 }
 
+extract_flag() {
+    opts="$1"
+    flag="$2"
+
+    set -- $opts
+    while [ "$#" -gt 0 ]; do
+        if [ "$1" = "$flag" ]; then
+            shift
+            if [ "$#" -gt 0 ]; then
+                echo "$1"
+            fi
+            return 0
+        fi
+        shift
+    done
+    return 1
+}
+
+parse_and_display_opts() {
+    opts="$1"
+    echo "Configuration:"
+    echo "  File: $CONFIG_FILE"
+    echo "  Options: $opts"
+    echo ""
+
+    fps=$(extract_flag "$opts" "-r" || echo "(unset)")
+    rate=$(extract_flag "$opts" "-a" || echo "(unset)")
+    device=$(extract_flag "$opts" "-d" || echo "(unset)")
+    start=$(extract_flag "$opts" "-s" || echo "(none)")
+
+    echo "  Frame rate (-r):  $fps"
+    echo "  Sample rate (-a): $rate Hz"
+    echo "  ALSA device (-d): $device"
+    if [ "$start" = "(none)" ]; then
+        echo "  Start mode:       wall clock (synced to system time)"
+    else
+        echo "  Start mode:       fixed timecode $start"
+    fi
+}
+
 cmd_show() {
     ensure_config
-    echo "CONFIG_FILE=$CONFIG_FILE"
-    echo "PITG_OPTS=$(current_opts)"
+    opts=$(current_opts)
+    parse_and_display_opts "$opts"
 }
 
 cmd_status() {
@@ -192,9 +234,26 @@ cmd_set_opts() {
     apply_and_restart
 }
 
+cmd_list_devices() {
+    echo "=== ALSA Hardware Devices ==="
+    aplay -l 2>/dev/null || echo "(no devices)"
+    echo ""
+    echo "=== ALSA Logical Devices ==="
+    aplay -L 2>/dev/null || echo "(no devices)"
+}
+
+cmd_set_defaults() {
+    ensure_root
+    write_opts "$DEFAULT_OPTS"
+    apply_and_restart
+}
+
 case "${1:-}" in
     show)
         cmd_show
+        ;;
+    list-devices)
+        cmd_list_devices
         ;;
     status)
         cmd_status
@@ -242,6 +301,10 @@ case "${1:-}" in
     set-opts)
         [ "$#" -eq 2 ] || { usage >&2; exit 1; }
         cmd_set_opts "$2"
+        ;;
+    set-defaults)
+        [ "$#" -eq 1 ] || { usage >&2; exit 1; }
+        cmd_set_defaults
         ;;
     ''|-h|--help|help)
         usage

@@ -153,40 +153,56 @@ journalctl -u pitg.service -n 50 --no-pager
 
 `pitgctl` provides a small command wrapper around the service and `/etc/default/pitg`.
 
-Show the current effective config:
+**View configuration and status:**
 
 ```bash
-sudo pitgctl show
+sudo pitgctl show                    # parsed display of current config
+sudo pitgctl status                  # systemd service status
+sudo pitgctl logs                    # recent journal entries
+sudo pitgctl list-devices            # show available ALSA devices
 ```
 
-Basic service control:
+**Service control:**
 
 ```bash
-sudo pitgctl status
-sudo pitgctl start
-sudo pitgctl stop
-sudo pitgctl restart
-sudo pitgctl logs
+sudo pitgctl start                   # start the service
+sudo pitgctl stop                    # stop the service
+sudo pitgctl restart                 # restart the service
 ```
 
-Set common options:
+**Configure runtime options:**
 
 ```bash
-sudo pitgctl set-fps 25
-sudo pitgctl set-fps 29.97df
-sudo pitgctl set-rate 48000
+sudo pitgctl set-fps 25              # change frame rate
+sudo pitgctl set-fps 29.97df         # drop-frame mode
+sudo pitgctl set-rate 48000          # change sample rate
 sudo pitgctl set-device plughw:CARD=Headphones,DEV=0
-sudo pitgctl set-start 01:00:00:00
-sudo pitgctl clear-start
-```
-
-Replace the full option string directly:
-
-```bash
+sudo pitgctl set-start 01:00:00:00   # fixed start timecode
+sudo pitgctl clear-start             # return to wall clock mode
 sudo pitgctl set-opts "-r 25 -a 48000 -d plughw:CARD=Headphones,DEV=0"
+sudo pitgctl set-defaults            # restore the recommended Pi 1 defaults
 ```
 
 Every `set-*` command updates `/etc/default/pitg` and restarts `pitg.service` automatically.
+
+**Example workflow:**
+
+```bash
+# Check current config
+sudo pitgctl show
+
+# List available ALSA devices to understand options
+sudo pitgctl list-devices
+
+# Change frame rate and restart
+sudo pitgctl set-fps 30
+
+# Restore defaults
+sudo pitgctl set-defaults
+
+# View recent service logs
+sudo pitgctl logs
+```
 
 ## Configuration Files
 
