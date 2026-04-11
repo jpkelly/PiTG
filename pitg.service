@@ -1,0 +1,14 @@
+[Unit]
+Description=Pi Timecode Generator
+After=sound.target
+
+[Service]
+Type=simple
+EnvironmentFile=-/etc/default/pitg
+ExecStart=/bin/sh -c '/usr/local/bin/pitg ${PITG_OPTS:--r 25 -d plughw:CARD=Headphones,DEV=0}'
+Restart=always
+RestartSec=2
+User=root
+
+[Install]
+WantedBy=multi-user.target
