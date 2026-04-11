@@ -5,6 +5,7 @@ After=sound.target
 [Service]
 Type=simple
 EnvironmentFile=-/etc/default/pitg
+ExecStartPre=/usr/bin/amixer sset PCM 100% unmute
 ExecStart=/bin/sh -c '/usr/local/bin/pitg ${PITG_OPTS:--r 25 -d plughw:CARD=Headphones,DEV=0}'
 Restart=always
 RestartSec=2
