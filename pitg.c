@@ -25,12 +25,9 @@
 #include <alsa/asoundlib.h>
 #include <ltc.h>
 
-#define SAMPLE_RATE    48000
+#define DEFAULT_SAMPLE_RATE 48000
 #define BUFFER_FRAMES  4096   /* ~85ms of audio headroom */
 #define PERIOD_FRAMES  1024   /* ~21ms per period */
-
-/* Max PCM samples in one LTC frame (at 24fps: 48000/24 = 2000) */
-#define MAX_FRAME_SAMPLES  2100
 
 /* ── Signal handling ─────────────────────────────────────────────── */
 
@@ -40,6 +37,20 @@ static void on_signal(int sig)
 {
     (void)sig;
     g_running = 0;
+}
+
+static int parse_sample_rate(const char *s)
+{
+    char *end = NULL;
+    long rate = strtol(s, &end, 10);
+
+    if (!s || *s == '\0' || !end || *end != '\0')
+        return -1;
+
+    if (rate < 8000 || rate > 192000)
+        return -1;
+
+    return (int)rate;
 }
 
 /* ── Frame rate table ────────────────────────────────────────────── */
@@ -134,7 +145,8 @@ static int tc_parse(TC *tc, const char *s)
 
 /* ── ALSA setup ──────────────────────────────────────────────────── */
 
-static snd_pcm_t *alsa_open(const char *device, unsigned int *rate_out)
+static snd_pcm_t *alsa_open(const char *device, unsigned int requested_rate,
+                            unsigned int *rate_out)
 {
     snd_pcm_t *pcm;
     int err;
@@ -160,7 +172,7 @@ static snd_pcm_t *alsa_open(const char *device, unsigned int *rate_out)
         return NULL;
     }
 
-    unsigned int rate = SAMPLE_RATE;
+    unsigned int rate = requested_rate;
     snd_pcm_hw_params_set_rate_near(pcm, hw, &rate, 0);
     *rate_out = rate;
 
@@ -183,8 +195,9 @@ static snd_pcm_t *alsa_open(const char *device, unsigned int *rate_out)
 static void usage(const char *prog)
 {
     fprintf(stderr,
-        "Usage: %s [-r fps] [-d device] [-s HH:MM:SS:FF]\n\n"
+    "Usage: %s [-r fps] [-a hz] [-d device] [-s HH:MM:SS:FF]\n\n"
         "  -r  Frame rate: 24 | 25 | 29.97 | 29.97df | 30  (default: 25)\n"
+    "  -a  Sample rate in Hz: 8000-192000  (default: 48000)\n"
         "  -d  ALSA device  (default: default)\n"
         "  -s  Start timecode, e.g. 01:00:00:00  (default: system clock)\n",
         prog);
@@ -196,11 +209,12 @@ int main(int argc, char **argv)
 {
     const FPSOption *fps = &fps_opts[1]; /* default: 25fps */
     const char *device = "default";
+    unsigned int requested_rate = DEFAULT_SAMPLE_RATE;
     TC tc = {0};
     int use_clock = 1;
     int opt;
 
-    while ((opt = getopt(argc, argv, "r:d:s:h")) != -1) {
+    while ((opt = getopt(argc, argv, "r:a:d:s:h")) != -1) {
         switch (opt) {
         case 'r':
             fps = find_fps(optarg);
@@ -210,6 +224,16 @@ int main(int argc, char **argv)
                 return 1;
             }
             break;
+        case 'a': {
+            int parsed_rate = parse_sample_rate(optarg);
+            if (parsed_rate < 0) {
+                fprintf(stderr, "pitg: invalid sample rate '%s'\n", optarg);
+                usage(argv[0]);
+                return 1;
+            }
+            requested_rate = (unsigned int)parsed_rate;
+            break;
+        }
         case 'd':
             device = optarg;
             break;
@@ -239,14 +263,14 @@ int main(int argc, char **argv)
 
     /* Open ALSA */
     unsigned int actual_rate = 0;
-    snd_pcm_t *pcm = alsa_open(device, &actual_rate);
+    snd_pcm_t *pcm = alsa_open(device, requested_rate, &actual_rate);
     if (!pcm)
         return 1;
 
-    if (actual_rate != SAMPLE_RATE)
+    if (actual_rate != requested_rate)
         fprintf(stderr,
                 "pitg: warning: sample rate negotiated to %u Hz "
-                "(wanted %d)\n", actual_rate, SAMPLE_RATE);
+                "(wanted %u)\n", actual_rate, requested_rate);
 
     /* Create LTC encoder */
     LTCEncoder *enc = ltc_encoder_create(
@@ -257,14 +281,21 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    fprintf(stderr,
-            "pitg: %s fps  |  device=%s  |  start %02d:%02d:%02d:%02d%s\n",
-            fps->name, device,
+        int max_frame_samples = (int)((actual_rate / 24.0) + 512.0);
+        int16_t *conv = calloc((size_t)max_frame_samples, sizeof(*conv));
+        if (!conv) {
+        fprintf(stderr, "pitg: failed to allocate sample buffer\n");
+        snd_pcm_close(pcm);
+        ltc_encoder_free(enc);
+        return 1;
+        }
+
+        fprintf(stderr,
+            "pitg: %s fps  |  rate=%u Hz  |  device=%s  |  start %02d:%02d:%02d:%02d%s\n",
+            fps->name, actual_rate, device,
             tc.h, tc.m, tc.s, tc.f,
             fps->drop ? " DF" : "");
     fprintf(stderr, "pitg: Ctrl-C to stop\n");
-
-    int16_t conv[MAX_FRAME_SAMPLES];
 
     while (g_running) {
         /* Load current timecode into encoder */
@@ -289,7 +320,7 @@ int main(int argc, char **argv)
         ltcsnd_sample_t *ltcbuf = NULL;
         int n = ltc_encoder_get_bufferptr(enc, &ltcbuf, 1);
 
-        if (n <= 0 || n > MAX_FRAME_SAMPLES) {
+        if (n <= 0 || n > max_frame_samples) {
             fprintf(stderr, "pitg: unexpected sample count %d\n", n);
             break;
         }
@@ -335,6 +366,7 @@ int main(int argc, char **argv)
     }
 
     snd_pcm_drain(pcm);
+    free(conv);
     snd_pcm_close(pcm);
     ltc_encoder_free(enc);
 
