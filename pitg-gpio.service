@@ -1,0 +1,14 @@
+[Unit]
+Description=PiTG GPIO Protocol Transmitter
+After=multi-user.target
+
+[Service]
+Type=simple
+EnvironmentFile=-/etc/default/pitg-gpio
+ExecStart=/bin/sh -c '/usr/local/bin/pitg-gpio ${PITG_GPIO_OPTS:--p both -u /dev/ttyAMA0 -q 18 -x next -b 19200 -i 250 -c 0}'
+Restart=always
+RestartSec=2
+User=root
+
+[Install]
+WantedBy=multi-user.target

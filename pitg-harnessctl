@@ -1,0 +1,114 @@
+#!/bin/sh
+
+set -eu
+
+LTC_SERVICE="pitg.service"
+PROTO_SERVICE="pitg-gpio.service"
+PROTO_ENV_FILE="/etc/default/pitg-gpio"
+
+usage() {
+    cat <<'EOF'
+Usage:
+  pitg-harnessctl start
+  pitg-harnessctl stop
+  pitg-harnessctl restart
+  pitg-harnessctl status
+  pitg-harnessctl logs
+  pitg-harnessctl cue <next|prev|blank-on|blank-off>
+EOF
+}
+
+ensure_root() {
+    if [ "$(id -u)" -ne 0 ]; then
+        echo "pitg-harnessctl: run as root (use sudo)" >&2
+        exit 1
+    fi
+}
+
+extract_flag() {
+    opts="$1"
+    flag="$2"
+
+    set -- $opts
+    while [ "$#" -gt 0 ]; do
+        if [ "$1" = "$flag" ]; then
+            shift
+            if [ "$#" -gt 0 ]; then
+                echo "$1"
+            fi
+            return 0
+        fi
+        shift
+    done
+    return 1
+}
+
+read_proto_opts() {
+    if [ -f "$PROTO_ENV_FILE" ]; then
+        sed -n 's/^PITG_GPIO_OPTS="\(.*\)"$/\1/p' "$PROTO_ENV_FILE" | tail -n 1
+    fi
+}
+
+cue_send() {
+    action="$1"
+    opts=$(read_proto_opts || true)
+
+    q=$(extract_flag "$opts" "-q" || echo "18")
+    b=$(extract_flag "$opts" "-b" || echo "19200")
+    c=$(extract_flag "$opts" "-c" || echo "0")
+
+    /usr/local/bin/pitg-gpio -p perfectcue -q "$q" -x "$action" -b "$b" -c "$c" -1
+}
+
+case "${1:-}" in
+    start)
+        ensure_root
+        systemctl start "$LTC_SERVICE"
+        systemctl start "$PROTO_SERVICE"
+        systemctl --no-pager --full status "$LTC_SERVICE" | head -10
+        systemctl --no-pager --full status "$PROTO_SERVICE" | head -10
+        ;;
+    stop)
+        ensure_root
+        systemctl stop "$PROTO_SERVICE"
+        systemctl stop "$LTC_SERVICE"
+        systemctl --no-pager --full status "$LTC_SERVICE" | head -10
+        systemctl --no-pager --full status "$PROTO_SERVICE" | head -10
+        ;;
+    restart)
+        ensure_root
+        systemctl restart "$LTC_SERVICE"
+        systemctl restart "$PROTO_SERVICE"
+        systemctl --no-pager --full status "$LTC_SERVICE" | head -10
+        systemctl --no-pager --full status "$PROTO_SERVICE" | head -10
+        ;;
+    status)
+        systemctl --no-pager --full status "$LTC_SERVICE"
+        echo
+        systemctl --no-pager --full status "$PROTO_SERVICE"
+        ;;
+    logs)
+        journalctl -u "$LTC_SERVICE" -u "$PROTO_SERVICE" -n 100 --no-pager
+        ;;
+    cue)
+        ensure_root
+        [ "$#" -eq 2 ] || { usage >&2; exit 1; }
+        case "$2" in
+            next|prev|blank-on|blank-off)
+                cue_send "$2"
+                ;;
+            *)
+                echo "pitg-harnessctl: invalid cue '$2'" >&2
+                usage >&2
+                exit 1
+                ;;
+        esac
+        ;;
+    ''|-h|--help|help)
+        usage
+        ;;
+    *)
+        usage >&2
+        exit 1
+        ;;
+esac

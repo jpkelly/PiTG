@@ -1,0 +1,14 @@
+[Unit]
+Description=PiTG PerfectCue Button Bridge
+After=multi-user.target
+
+[Service]
+Type=simple
+EnvironmentFile=-/etc/default/pitg-cue-buttons
+ExecStart=/bin/sh -c '/usr/local/bin/pitg-cue-buttons ${PITG_CUE_BUTTONS_OPTS:--N 23 -P 24 -T 18 -B 19200 -D 120 -c 0}'
+Restart=always
+RestartSec=1
+User=root
+
+[Install]
+WantedBy=multi-user.target

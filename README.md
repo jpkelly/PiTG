@@ -1,42 +1,48 @@
 # PiTG
 
-PiTG is a simple LTC timecode generator for Raspberry Pi.
+PiTG is a Raspberry Pi 1 focused timecode/protocol toolkit.
 
-It generates SMPTE LTC and outputs it on the Raspberry Pi 3.5mm audio jack using ALSA and libltc. The intended target is a Raspberry Pi 1 running 32-bit Raspberry Pi OS Trixie as a fire-and-forget LTC test source.
+It now contains two runtime outputs:
 
-## Features
+- `pitg`: SMPTE LTC over analog audio (3.5mm jack) using ALSA + libltc
+- `pitg-gpio`: Limitimer/PerfectCue protocol output with split transport support
 
-- Standard frame rates: `24`, `25`, `29.97`, `29.97df`, `30`
-- Starts from system wall clock by default
-- Optional fixed start timecode
-- Headless operation via systemd
-- Output via the Pi headphone jack
+## Why This Fork
+
+You asked for a project fork that can output both Limitimer protocol and PerfectCue protocol on Raspberry Pi 1.
+
+This repository now ships that GPIO path in a separate binary so your existing LTC audio workflow stays intact.
 
 ## Requirements
 
-- Raspberry Pi OS 32-bit
-- `libltc-dev`
-- `libasound2-dev`
+On Raspberry Pi OS:
+
 - `gcc`
 - `make`
+- `libltc-dev`
+- `libasound2-dev`
+- `libgpiod-dev`
+
+Install build dependencies:
+
+```bash
+make deps
+```
 
 ## Build
 
-On the Pi:
-
 ```bash
-cd ~/PiTG
-make deps
 make
 ```
 
-Optional install:
+Build outputs:
 
-```bash
-sudo make install
-```
+- `pitg`
+- `pitg-gpio`
+- `pitg-harnessctl`
+- `pitg-cue-buttons`
 
-## Usage
+## 1) LTC Audio Generator (`pitg`)
 
 Run with defaults:
 
@@ -44,56 +50,245 @@ Run with defaults:
 ./pitg
 ```
 
-Examples:
+Common options:
 
-```bash
-./pitg -r 25
-./pitg -r 30
-./pitg -r 29.97df
-./pitg -r 24 -s 01:00:00:00
-./pitg -r 25 -d plughw:CARD=Headphones,DEV=0
-```
+- `-r <fps>`: `24 | 25 | 29.97 | 29.97df | 30`
+- `-a <hz>`: sample rate (`8000-192000`)
+- `-d <device>`: ALSA device
+- `-s <HH:MM:SS:FF>`: fixed start timecode
 
-Options:
-
-- `-r <fps>` frame rate: `24 | 25 | 29.97 | 29.97df | 30`
-- `-a <hz>` sample rate in Hz: `8000-192000`
-- `-d <device>` ALSA device
-- `-s <HH:MM:SS:FF>` fixed start timecode
-
-Example with explicit sample rate:
+Example:
 
 ```bash
 ./pitg -r 25 -a 48000 -d plughw:CARD=Headphones,DEV=0
 ```
 
-## Audio Output
+## 2) Protocol Output (`pitg-gpio`)
 
-For Raspberry Pi 1, the intended output is:
+`pitg-gpio` supports two transport paths:
 
-```bash
-plughw:CARD=Headphones,DEV=0
-```
+- Limitimer over hardware UART (`-u /dev/ttyAMA0` recommended on Pi 1)
+- PerfectCue over GPIO bit-banged serial using libgpiod
 
-List devices with:
+Supported protocol modes:
 
-```bash
-aplay -l
-aplay -L
-```
+- `limitimer`
+- `perfectcue`
+- `both`
 
-Set output level manually if needed:
+Run defaults (both protocols):
 
 ```bash
-amixer sset PCM 100% unmute
+./pitg-gpio
 ```
 
-## Systemd Service
+CLI options:
 
-Install the service:
+- `-p <protocol>`: `limitimer | perfectcue | both` (default: `both`)
+- `-u <tty>`: UART device for Limitimer output (example: `/dev/ttyAMA0`)
+- `-g <gpio>`: Limitimer GPIO pin (default: `17`)
+- `-q <gpio>`: PerfectCue GPIO pin (default: `18`)
+- `-x <cmd>`: PerfectCue command: `next | prev | blank-off | blank-on` (default: `next`)
+- `-b <baud>`: UART/serial baud rate (default: `19200`)
+- `-i <ms>`: transmission interval in ms (default: `1000`)
+- `-c <index>`: gpiochip index (default: `0`)
+- `-1`: one-shot mode (send one event/frame and exit)
+
+Examples:
+
+```bash
+./pitg-gpio -p limitimer -u /dev/ttyAMA0 -b 19200 -i 250
+./pitg-gpio -p perfectcue -q 18 -x next -b 19200 -i 250
+./pitg-gpio -p both -u /dev/ttyAMA0 -q 18 -x blank-on -b 19200 -i 250
+./pitg-gpio -p perfectcue -q 18 -x blank-on -b 19200 -1
+```
+
+## Recommended Split (Limitimer Critical, PerfectCue Occasional)
+
+If Limitimer is the primary stream and PerfectCue is occasional, run them separately:
+
+1. Continuous service for Limitimer only.
+2. Fire PerfectCue events as one-shot commands when needed.
+
+Example service options for Limitimer stream on Pi 1 UART:
+
+```bash
+PITG_GPIO_OPTS="-p limitimer -u /dev/ttyAMA0 -b 19200 -i 250 -c 0"
+```
+
+Example occasional PerfectCue commands:
+
+```bash
+./pitg-gpio -p perfectcue -q 18 -x next -b 19200 -1
+./pitg-gpio -p perfectcue -q 18 -x prev -b 19200 -1
+./pitg-gpio -p perfectcue -q 18 -x blank-on -b 19200 -1
+./pitg-gpio -p perfectcue -q 18 -x blank-off -b 19200 -1
+```
+
+## Raspberry Pi 1 Wiring (Split Mode)
+
+Recommended on Pi 1:
+
+- Limitimer stream on hardware UART (`/dev/ttyAMA0`) through RS-485 transceiver #1
+- PerfectCue occasional events on GPIO through RS-485 transceiver #2
+
+Pin map (40-pin header numbering):
+
+- UART TXD0: BCM `GPIO14`, physical pin `8` -> Limitimer transceiver DI
+- UART RXD0: BCM `GPIO15`, physical pin `10` (optional for TX-only)
+- PerfectCue TX GPIO: BCM `GPIO18`, physical pin `12` -> PerfectCue transceiver DI
+- PerfectCue NEXT button input: BCM `GPIO23`, physical pin `16`
+- PerfectCue PREV button input: BCM `GPIO24`, physical pin `18`
+- Ground: physical pin `6` (or any GND)
+
+Button wiring (default active-low):
+
+- One side of each momentary button -> GPIO input pin (`GPIO23` or `GPIO24`)
+- Other side of each button -> GND
+- Use external pull-up resistors to 3.3V (for example 10k) unless you provide another pull strategy
+- If your buttons are wired active-high, run `pitg-cue-buttons` with `-H`
+
+RS-485 line side:
+
+- Transceiver #1 A/B -> Limitimer A/B
+- Transceiver #2 A/B -> PerfectCue A/B
+
+### Wiring Diagram (with Buttons)
+
+```mermaid
+flowchart TB
+	subgraph PI[Raspberry Pi 1]
+		P8[Pin 8<br/>GPIO14 / TXD0]
+		P10[Pin 10<br/>GPIO15 / RXD0 optional]
+		P12[Pin 12<br/>GPIO18 PerfectCue TX]
+		P16[Pin 16<br/>GPIO23 NEXT button]
+		P18[Pin 18<br/>GPIO24 PREV button]
+		PG[Pin 6<br/>GND]
+	end
+
+	subgraph BTN[Momentary Buttons]
+		BN[NEXT button]
+		BP[PREV button]
+	end
+
+	subgraph T1[RS-485 Transceiver #1<br/>Limitimer]
+		T1DI[DI]
+		T1RO[RO optional]
+		T1A[A / D+]
+		T1B[B / D-]
+		T1G[GND]
+	end
+
+	subgraph T2[RS-485 Transceiver #2<br/>PerfectCue]
+		T2DI[DI]
+		T2A[A / D+]
+		T2B[B / D-]
+		T2G[GND]
+	end
+
+	subgraph L[Limitimer Device/Bus]
+		LA[A / D+]
+		LB[B / D-]
+	end
+
+	subgraph C[PerfectCue Device/Bus]
+		CA[A / D+]
+		CB[B / D-]
+	end
+
+	P8 --> T1DI
+	P10 -. optional RX .- T1RO
+	P12 --> T2DI
+	PG --> T1G
+	PG --> T2G
+
+	T1A --> LA
+	T1B --> LB
+
+	T2A --> CA
+	T2B --> CB
+
+	P16 --- BN
+	P18 --- BP
+	BN --- PG
+	BP --- PG
+```
+
+### Pin 13 Ambiguity (Pi 1)
+
+Early Raspberry Pi board revisions mapped physical pin 13 differently (`GPIO21` on rev1 boards, `GPIO27` on later revisions). To avoid this ambiguity, use physical pin 12 (`GPIO18`) for PerfectCue output.
+
+References:
+
+- Raspberry Pi pinout with rev1/rev2 notes: https://pinout.xyz/pinout/pin13_gpio27
+- Raspberry Pi GPIO basics and board docs: https://www.raspberrypi.com/documentation/computers/raspberry-pi.html
+
+Check your board revision on-device:
+
+```bash
+cat /proc/cpuinfo | grep Revision
+```
+
+## Wiring Verification (Debug First)
+
+Treat the wiring diagram as a starting hypothesis and verify on hardware.
+
+1. Start with one link at a time (Limitimer first, then PerfectCue).
+2. Confirm UART TX is active on Pi pin 8 while Limitimer stream is running.
+3. Confirm PerfectCue GPIO pin toggles only when one-shot command is sent.
+4. If there is no communication, swap A/B on that specific RS-485 link.
+5. For manual DE/RE boards, force TX-only (`DE=HIGH`, `RE=HIGH`).
+6. Verify `19200 8N1` on both sides.
+7. Add/confirm 120 ohm termination only at bus ends.
+
+Recommended quick debug commands:
+
+```bash
+# Limitimer continuous stream over UART
+./pitg-gpio -p limitimer -u /dev/ttyAMA0 -b 19200 -i 250
+
+# PerfectCue one-shot tests over GPIO18
+./pitg-gpio -p perfectcue -q 18 -x next -b 19200 -1
+./pitg-gpio -p perfectcue -q 18 -x prev -b 19200 -1
+./pitg-gpio -p perfectcue -q 18 -x blank-on -b 19200 -1
+./pitg-gpio -p perfectcue -q 18 -x blank-off -b 19200 -1
+```
+
+## Protocol Payload Templates
+
+Current implementation uses reverse-engineered protocol framing from the
+`Depili/limitimer` and `clock8002` references:
+
+- Limitimer:
+	- Transport: RS-485, `19200 8N1`
+	- Packet framing: starts `0x81`, payload bytes use 7-bit values,
+		checksum marker `0x83`, CRC16/Modbus (2 bytes), end `0xFF`
+	- Status packet type `0x00`, 55-byte packet generated by
+		`build_limitimer_status_packet()` in `pitg_gpio.c`
+- PerfectCue:
+	- Transport: `19200 8N1`
+	- Commands emitted as one-byte events:
+		- `0x0F` next/right
+		- `0x1F` previous/left
+		- `0x2F` blank off
+		- `0x3F` blank on
+
+If your specific hardware revision needs different behavior, edit:
+
+- `build_limitimer_status_packet()` in `pitg_gpio.c`
+- `perfectcue_command_byte()` in `pitg_gpio.c`
+
+## Install And Enable Services
+
+Install binaries and service files:
 
 ```bash
 sudo make install-service
+```
+
+Enable services:
+
+```bash
 sudo make enable-service
 ```
 
@@ -101,409 +296,55 @@ This installs:
 
 - `/usr/local/bin/pitg`
 - `/usr/local/bin/pitgctl`
+- `/usr/local/bin/pitg-harnessctl`
+- `/usr/local/bin/pitg-gpio`
+- `/usr/local/bin/pitg-cue-buttons`
 - `/etc/systemd/system/pitg.service`
-- `/etc/default/pitg` if it does not already exist
-
-The service is configured to:
-
-- force headphone PCM to `100%` and unmute before start
-- restart automatically if the process exits
-- start on boot
+- `/etc/systemd/system/pitg-gpio.service`
+- `/etc/systemd/system/pitg-cue-buttons.service`
+- `/etc/default/pitg` (if missing)
+- `/etc/default/pitg-gpio` (if missing)
+- `/etc/default/pitg-cue-buttons` (if missing)
 
 ## Service Configuration
 
-Edit:
-
-```bash
-sudo nano /etc/default/pitg
-```
-
-Example:
-
-```bash
-PITG_OPTS="-r 25 -a 48000 -d plughw:CARD=Headphones,DEV=0"
-```
-
-Apply changes:
-
-```bash
-sudo systemctl restart pitg.service
-```
-
-Or use the helper:
-
-```bash
-sudo pitgctl restart
-```
-
-Recommended settings on Pi 1:
-
-- Frame rate: choose the rate your receiving clock expects
-- Sample rate: `48000` is the safest default
-- ALSA device: `plughw:CARD=Headphones,DEV=0`
-
-Check status:
-
-```bash
-systemctl status pitg.service
-journalctl -u pitg.service -n 50 --no-pager
-```
-
-## pitgctl Helper
-
-`pitgctl` provides a small command wrapper around the service and `/etc/default/pitg`.
-
-**View configuration and status:**
-
-```bash
-sudo pitgctl show                    # parsed display of current config
-sudo pitgctl status                  # systemd service status
-sudo pitgctl logs                    # recent journal entries
-sudo pitgctl list-devices            # show available ALSA devices
-```
-
-**Service control:**
-
-```bash
-sudo pitgctl start                   # start the service
-sudo pitgctl stop                    # stop the service
-sudo pitgctl restart                 # restart the service
-```
-
-**Configure runtime options:**
-
-```bash
-sudo pitgctl set-fps 25              # change frame rate
-sudo pitgctl set-fps 29.97df         # drop-frame mode
-sudo pitgctl set-rate 48000          # change sample rate
-sudo pitgctl set-device plughw:CARD=Headphones,DEV=0
-sudo pitgctl set-start 01:00:00:00   # fixed start timecode
-sudo pitgctl clear-start             # return to wall clock mode
-sudo pitgctl set-opts "-r 25 -a 48000 -d plughw:CARD=Headphones,DEV=0"
-sudo pitgctl set-defaults            # restore the recommended Pi 1 defaults
-```
-
-Every `set-*` command updates `/etc/default/pitg` and restarts `pitg.service` automatically.
-
-**Example workflow:**
-
-```bash
-# Check current config
-sudo pitgctl show
-
-# List available ALSA devices to understand options
-sudo pitgctl list-devices
-
-# Change frame rate and restart
-sudo pitgctl set-fps 30
-
-# Restore defaults
-sudo pitgctl set-defaults
-
-# View recent service logs
-sudo pitgctl logs
-```
-
-## Configuration Files
-
-Runtime configuration:
+LTC audio service config:
 
 - `/etc/default/pitg`
 
-Service definition:
+GPIO protocol service config:
 
-- `/etc/systemd/system/pitg.service`
+- `/etc/default/pitg-gpio`
 
-Installed binaries:
-
-- `/usr/local/bin/pitg`
-- `/usr/local/bin/pitgctl`
-
-Template config in the repo:
-
-- `pitg.env.example`
-
-## Recommended Configuration
-
-For a Pi 1 LTC test source, use:
+Default GPIO service options:
 
 ```bash
-PITG_OPTS="-r 25 -a 48000 -d plughw:CARD=Headphones,DEV=0"
+PITG_GPIO_OPTS="-p both -u /dev/ttyAMA0 -q 18 -x next -b 19200 -i 250 -c 0"
 ```
 
-If your target expects another frame rate, change only `-r` first.
+Restart after changes:
 
-Recommended adjustment order:
+```bash
+sudo systemctl restart pitg-gpio.service
+```
 
-- frame rate first
-- sample rate second, only if needed
-- ALSA device only if the Pi audio routing changes
-- fixed start time only if you explicitly want free-running code from a known start value instead of wall clock
+## Harness Helper
 
-## Troubleshooting
+`pitg-harnessctl` controls the full test harness (both services) and can send one-shot PerfectCue events.
 
-- If there is no LTC, run `sudo pitgctl status` and `sudo pitgctl logs`.
-- If the service is running but the target sees no code, verify the mixer state with `amixer scontents`.
-- Do not run a manual `pitg` process while `pitg.service` is active.
-- If you need to test manually, stop the service first: `sudo pitgctl stop`
-- Restart the service after manual testing: `sudo pitgctl start`
+```bash
+sudo pitg-harnessctl start
+sudo pitg-harnessctl status
+sudo pitg-harnessctl logs
+sudo pitg-harnessctl cue next
+sudo pitg-harnessctl cue blank-on
+sudo pitg-harnessctl restart
+sudo pitg-harnessctl stop
+```
 
-## Notes
+## Notes For Raspberry Pi 1
 
-- Do not run a manual `pitg` process at the same time as `pitg.service`.
-- If LTC disappears unexpectedly, first check whether another instance is already holding the audio device.
-- The Pi 1 audio jack is PWM-based, but it is adequate for LTC test generation.
-*** Add File: /Users/jp/Documents/GitHub/PiTG/pitgctl
-#!/bin/sh
-
-set -eu
-
-SERVICE="pitg.service"
-CONFIG_FILE="/etc/default/pitg"
-DEFAULT_OPTS="-r 25 -a 48000 -d plughw:CARD=Headphones,DEV=0"
-
-usage() {
-	cat <<'EOF'
-Usage:
-  pitgctl show
-  pitgctl status
-  pitgctl logs
-  pitgctl start
-  pitgctl stop
-  pitgctl restart
-  pitgctl set-fps <24|25|29.97|29.97df|30>
-  pitgctl set-rate <hz>
-  pitgctl set-device <alsa-device>
-  pitgctl set-start <HH:MM:SS:FF>
-  pitgctl clear-start
-  pitgctl set-opts "<full pitg option string>"
-EOF
-}
-
-ensure_root() {
-	if [ "$(id -u)" -ne 0 ]; then
-		echo "pitgctl: run as root (use sudo)" >&2
-		exit 1
-	fi
-}
-
-ensure_config() {
-	if [ ! -f "$CONFIG_FILE" ]; then
-		write_opts "$DEFAULT_OPTS"
-	fi
-}
-
-current_opts() {
-	if [ -f "$CONFIG_FILE" ]; then
-		sed -n 's/^PITG_OPTS="\(.*\)"$/\1/p' "$CONFIG_FILE" | tail -n 1
-	fi
-}
-
-write_opts() {
-	opts="$1"
-	cat > "$CONFIG_FILE" <<EOF
-# Managed by pitgctl.
-# Standard frame rates: 24, 25, 29.97, 29.97df, 30
-
-PITG_OPTS="$opts"
-EOF
-}
-
-apply_and_restart() {
-	systemctl restart "$SERVICE"
-	systemctl --no-pager --full status "$SERVICE" | head -15
-}
-
-replace_or_append_flag() {
-	opts="$1"
-	flag="$2"
-	value="$3"
-
-	set -- $opts
-	out=""
-	replaced=0
-
-	while [ "$#" -gt 0 ]; do
-		if [ "$1" = "$flag" ]; then
-			shift
-			if [ "$#" -eq 0 ]; then
-				break
-			fi
-			if [ -n "$out" ]; then
-				out="$out "
-			fi
-			out="$out$flag $value"
-			replaced=1
-			shift
-			continue
-		fi
-		if [ -n "$out" ]; then
-			out="$out "
-		fi
-		out="$out$1"
-		shift
-	done
-
-	if [ "$replaced" -eq 0 ]; then
-		if [ -n "$out" ]; then
-			out="$out "
-		fi
-		out="$out$flag $value"
-	fi
-
-	echo "$out"
-}
-
-remove_flag() {
-	opts="$1"
-	flag="$2"
-
-	set -- $opts
-	out=""
-
-	while [ "$#" -gt 0 ]; do
-		if [ "$1" = "$flag" ]; then
-			shift
-			if [ "$#" -gt 0 ]; then
-				shift
-			fi
-			continue
-		fi
-		if [ -n "$out" ]; then
-			out="$out "
-		fi
-		out="$out$1"
-		shift
-	done
-
-	echo "$out"
-}
-
-validate_fps() {
-	case "$1" in
-		24|25|29.97|29.97df|30) ;;
-		*)
-			echo "pitgctl: invalid frame rate '$1'" >&2
-			exit 1
-			;;
-	esac
-}
-
-validate_rate() {
-	case "$1" in
-		''|*[!0-9]*)
-			echo "pitgctl: sample rate must be an integer" >&2
-			exit 1
-			;;
-	esac
-
-	if [ "$1" -lt 8000 ] || [ "$1" -gt 192000 ]; then
-		echo "pitgctl: sample rate must be between 8000 and 192000" >&2
-		exit 1
-	fi
-}
-
-validate_start() {
-	echo "$1" | grep -Eq '^[0-9]{2}:[0-9]{2}:[0-9]{2}:[0-9]{2}$' || {
-		echo "pitgctl: start timecode must be HH:MM:SS:FF" >&2
-		exit 1
-	}
-}
-
-cmd_show() {
-	ensure_config
-	echo "CONFIG_FILE=$CONFIG_FILE"
-	echo "PITG_OPTS=$(current_opts)"
-}
-
-cmd_status() {
-	systemctl --no-pager --full status "$SERVICE"
-}
-
-cmd_logs() {
-	journalctl -u "$SERVICE" -n 50 --no-pager
-}
-
-cmd_set_flag() {
-	ensure_root
-	ensure_config
-	opts=$(current_opts)
-	new_opts=$(replace_or_append_flag "$opts" "$1" "$2")
-	write_opts "$new_opts"
-	apply_and_restart
-}
-
-cmd_clear_start() {
-	ensure_root
-	ensure_config
-	opts=$(current_opts)
-	new_opts=$(remove_flag "$opts" "-s")
-	write_opts "$new_opts"
-	apply_and_restart
-}
-
-cmd_set_opts() {
-	ensure_root
-	write_opts "$1"
-	apply_and_restart
-}
-
-case "${1:-}" in
-	show)
-		cmd_show
-		;;
-	status)
-		cmd_status
-		;;
-	logs)
-		cmd_logs
-		;;
-	start)
-		ensure_root
-		systemctl start "$SERVICE"
-		cmd_status
-		;;
-	stop)
-		ensure_root
-		systemctl stop "$SERVICE"
-		cmd_status
-		;;
-	restart)
-		ensure_root
-		apply_and_restart
-		;;
-	set-fps)
-		[ "$#" -eq 2 ] || { usage >&2; exit 1; }
-		validate_fps "$2"
-		cmd_set_flag -r "$2"
-		;;
-	set-rate)
-		[ "$#" -eq 2 ] || { usage >&2; exit 1; }
-		validate_rate "$2"
-		cmd_set_flag -a "$2"
-		;;
-	set-device)
-		[ "$#" -eq 2 ] || { usage >&2; exit 1; }
-		cmd_set_flag -d "$2"
-		;;
-	set-start)
-		[ "$#" -eq 2 ] || { usage >&2; exit 1; }
-		validate_start "$2"
-		cmd_set_flag -s "$2"
-		;;
-	clear-start)
-		[ "$#" -eq 1 ] || { usage >&2; exit 1; }
-		cmd_clear_start
-		;;
-	set-opts)
-		[ "$#" -eq 2 ] || { usage >&2; exit 1; }
-		cmd_set_opts "$2"
-		;;
-	''|-h|--help|help)
-		usage
-		;;
-	*)
-		usage >&2
-		exit 1
-		;;
-esac
+- Use physical GPIO level shifting/isolation if the destination system requires it.
+- Verify pin numbering against BCM GPIO numbers (the tool uses BCM indexes).
+- For protocol verification, check output with a logic analyzer or oscilloscope.
+- Pi 1 UART0 pins are GPIO14 (TXD0, pin 8) and GPIO15 (RXD0, pin 10).
