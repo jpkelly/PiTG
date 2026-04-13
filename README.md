@@ -196,14 +196,7 @@ flowchart TB
         direction LR
         subgraph LIM_RJ45[RJ45 Socket]
             direction TB
-            L1[Pin 1]
-            L2[Pin 2]
-            L3[Pin 3]
-            L4[Pin 4]
-            L5[Pin 5]
-            L6[Pin 6]
-            L7[Pin 7]
-            L8[Pin 8]
+            L1[Pin 1] ~~~ L2[Pin 2] ~~~ L3[Pin 3] ~~~ L4[Pin 4] ~~~ L5[Pin 5] ~~~ L6[Pin 6] ~~~ L7[Pin 7] ~~~ L8[Pin 8]
         end
         subgraph LIM_XCVR[TTL→RS485 · ttyAMA0]
             LA[A +]
@@ -216,14 +209,7 @@ flowchart TB
         direction LR
         subgraph PC_RJ45[RJ45 Socket]
             direction TB
-            P1[Pin 1]
-            P2[Pin 2]
-            P3[Pin 3]
-            P4[Pin 4]
-            P5[Pin 5]
-            P6[Pin 6]
-            P7[Pin 7]
-            P8[Pin 8]
+            P1[Pin 1] ~~~ P2[Pin 2] ~~~ P3[Pin 3] ~~~ P4[Pin 4] ~~~ P5[Pin 5] ~~~ P6[Pin 6] ~~~ P7[Pin 7] ~~~ P8[Pin 8]
         end
         subgraph PC_XCVR[TTL→RS485 · GPIO18]
             PA[A +]
