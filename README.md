@@ -188,38 +188,33 @@ RS-485 line side:
 
 ### RJ45 Connector Wiring (Limitimer / PerfectCue)
 
-Use this when building RJ45 breakout/cable adapters for DSAN bus devices.
+Use this when building RJ45 breakout/cable adapters for DSAN bus devices. Each device gets its own RS-485 transceiver board and its own RJ45 cable.
 
-RJ45 pinout (device-side bus) — same connector for both Limitimer and PerfectCue:
+**Limitimer** — RS-485 transceiver → `/dev/ttyAMA0` (Pi pin 8 / GPIO14):
 
-| Pin | Signal    |
-|-----|-----------|
-| 1   | +12V (do not connect to Pi harness) |
-| 2   | +12V (do not connect to Pi harness) |
-| 3   | A (D+)    |
-| 4   | B (D-)    |
-| 5   | B (D-)    |
-| 6   | A (D+)    |
-| 7   | (unused)  |
-| 8   | +12V (do not connect to Pi harness) |
+| RJ45 Pin | Signal | Connect to |
+|----------|--------|------------|
+| 1 | +12V | — do not connect |
+| 2 | +12V | — do not connect |
+| 3 | A (D+) | Transceiver A |
+| 4 | B (D-) | Transceiver B |
+| 5 | B (D-) | Transceiver GND |
+| 6 | A (D+) | — do not connect |
+| 7 | (unused) | — do not connect |
+| 8 | +12V | — do not connect |
 
-Pins 3 and 6 are both A (D+); pins 4 and 5 are both B (D-). Use whichever pair is most convenient for your cable/breakout build.
+**PerfectCue** — RS-485 transceiver → GPIO18 (Pi pin 12):
 
-**Limitimer hookup** (RS-485 transceiver on `/dev/ttyAMA0`, pin 8 / GPIO14):
-
-- Transceiver `A` -> RJ45 pin `3`
-- Transceiver `B` -> RJ45 pin `4` (or `5`)
-- Transceiver `GND` -> RJ45 pin `4` or `5`
-- **Do not connect** RJ45 pins `1`, `2`, or `8` (`+12V`)
-
-**PerfectCue hookup** (RS-485 transceiver on GPIO18, pin 12):
-
-- Transceiver `A` -> RJ45 pin `6`
-- Transceiver `B` -> RJ45 pin `5` (or `4`)
-- Transceiver `GND` -> RJ45 pin `4` or `5`
-- **Do not connect** RJ45 pins `1`, `2`, or `8` (`+12V`)
-
-Each device gets its own RS-485 transceiver board and its own RJ45 cable.
+| RJ45 Pin | Signal | Connect to |
+|----------|--------|------------|
+| 1 | +12V | — do not connect |
+| 2 | +12V | — do not connect |
+| 3 | A (D+) | — do not connect |
+| 4 | B (D-) | Transceiver GND |
+| 5 | B (D-) | Transceiver B |
+| 6 | A (D+) | Transceiver A |
+| 7 | (unused) | — do not connect |
+| 8 | +12V | — do not connect |
 
 ### Wiring Diagram (with Buttons)
 
