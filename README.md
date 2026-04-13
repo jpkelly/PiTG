@@ -188,20 +188,20 @@ RS-485 line side:
 
 ### RJ45 Connector Wiring (Limitimer / PerfectCue)
 
-Use this when building RJ45 breakout/cable adapters for DSAN bus devices. Each device gets its own RS-485 transceiver board and its own RJ45 cable. Pins 3 & 6 share the A (D+) wire; pins 4 & 5 share the B (D−) wire — four terminations, two signals.
+Use this when building RJ45 breakout/cable adapters for DSAN bus devices. Each device gets its own RS-485 transceiver board and its own RJ45 cable. The pin routing below follows the reference diagram exactly.
 
 ```mermaid
 flowchart LR
     subgraph LIM_RJ45[Limitimer RJ45 Socket]
         direction TB
-		L1[Pin 1 · +12V · NC]
-		L2[Pin 2 · +12V · NC]
-		L3[Pin 3 · A D+]
-		L4[Pin 4 · B D-]
-		L5[Pin 5 · B D-]
-		L6[Pin 6 · A D+]
-		L7[Pin 7 · unused · NC]
-		L8[Pin 8 · +12V · NC]
+		L1[Pin 1]
+		L2[Pin 2]
+		L3[Pin 3]
+		L4[Pin 4]
+		L5[Pin 5]
+		L6[Pin 6]
+		L7[Pin 7]
+		L8[Pin 8]
     end
     subgraph LIM_XCVR[TTL→RS485 · ttyAMA0]
         LA[A +]
@@ -212,48 +212,26 @@ flowchart LR
 
     subgraph PC_RJ45[PerfectCue RJ45 Socket]
         direction TB
-		P1[Pin 1 · +12V · NC]
-		P2[Pin 2 · +12V · NC]
-		P3[Pin 3 · A D+]
-		P4[Pin 4 · B D-]
-		P5[Pin 5 · B D-]
-		P6[Pin 6 · A D+]
-		P7[Pin 7 · unused · NC]
-		P8[Pin 8 · +12V · NC]
+		P1[Pin 1]
+		P2[Pin 2]
+		P3[Pin 3]
+		P4[Pin 4]
+		P5[Pin 5]
+		P6[Pin 6]
+		P7[Pin 7]
+		P8[Pin 8]
     end
     subgraph PC_XCVR[TTL→RS485 · GPIO18]
         PA[A +]
         PB[B -]
     end
-    P3 & P6 --> PA
+    P2 & P6 --> PA
     P4 & P5 --> PB
 ```
 
-**Limitimer** — RS-485 transceiver → `/dev/ttyAMA0` (Pi pin 8 / GPIO14):
-
-| RJ45 Pin | Signal | Connect to |
-|----------|--------|------------|
-| 1 | +12V | — do not connect |
-| 2 | +12V | — do not connect |
-| 3 | A (D+) | Transceiver A |
-| 4 | B (D-) | Transceiver B |
-| 5 | B (D-) | Transceiver B (shares wire with pin 4) |
-| 6 | A (D+) | Transceiver A (shares wire with pin 3) |
-| 7 | (unused) | — do not connect |
-| 8 | +12V | — do not connect |
-
-**PerfectCue** — RS-485 transceiver → GPIO18 (Pi pin 12):
-
-| RJ45 Pin | Signal | Connect to |
-|----------|--------|------------|
-| 1 | +12V | — do not connect |
-| 2 | +12V | — do not connect |
-| 3 | A (D+) | Transceiver A |
-| 4 | B (D-) | Transceiver B |
-| 5 | B (D-) | Transceiver B (shares wire with pin 4) |
-| 6 | A (D+) | Transceiver A (shares wire with pin 3) |
-| 7 | (unused) | — do not connect |
-| 8 | +12V | — do not connect |
+Pin groups shown in the diagram:
+- Limitimer socket: `3 + 6` to `A (+)`, and `4 + 5` to `B (-)`.
+- PerfectCue socket: `2 + 6` to `A (+)`, and `4 + 5` to `B (-)`.
 
 ### Wiring Diagram (with Buttons)
 
