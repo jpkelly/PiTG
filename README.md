@@ -18,6 +18,8 @@ It now contains two runtime outputs:
 - [Recommended Split (Limitimer Critical, PerfectCue Occasional)](#recommended-split-limitimer-critical-perfectcue-occasional)
 - [Raspberry Pi 1 Wiring (Split Mode)](#raspberry-pi-1-wiring-split-mode)
   - [RJ45 Connector Wiring (Limitimer / PerfectCue)](#rj45-connector-wiring-limitimer--perfectcue)
+  - [Wiring Diagram (with Buttons)](#wiring-diagram-with-buttons)
+  - [Pin 13 Ambiguity (Pi 1)](#pin-13-ambiguity-pi-1)
 - [Wiring Verification (Debug First)](#wiring-verification-debug-first)
 - [Protocol Payload Templates](#protocol-payload-templates)
 - [Install And Enable Services](#install-and-enable-services)
