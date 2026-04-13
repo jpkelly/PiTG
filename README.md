@@ -198,8 +198,8 @@ Use this when building RJ45 breakout/cable adapters for DSAN bus devices. Each d
 | 2 | +12V | — do not connect |
 | 3 | A (D+) | Transceiver A |
 | 4 | B (D-) | Transceiver B |
-| 5 | B (D-) | Transceiver GND |
-| 6 | A (D+) | — do not connect |
+| 5 | B (D-) | Transceiver B |
+| 6 | A (D+) | Transceiver A |
 | 7 | (unused) | — do not connect |
 | 8 | +12V | — do not connect |
 
@@ -209,8 +209,8 @@ Use this when building RJ45 breakout/cable adapters for DSAN bus devices. Each d
 |----------|--------|------------|
 | 1 | +12V | — do not connect |
 | 2 | +12V | — do not connect |
-| 3 | A (D+) | — do not connect |
-| 4 | B (D-) | Transceiver GND |
+| 3 | A (D+) | Transceiver A |
+| 4 | B (D-) | Transceiver B |
 | 5 | B (D-) | Transceiver B |
 | 6 | A (D+) | Transceiver A |
 | 7 | (unused) | — do not connect |
