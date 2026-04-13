@@ -178,7 +178,7 @@ Button wiring (default active-low):
 
 - One side of each momentary button -> GPIO input pin (`GPIO23` or `GPIO24`)
 - Other side of each button -> GND
-- Use external pull-up resistors to 3.3V (for example 10k) unless you provide another pull strategy
+- No external pull-up resistors needed — `pitg-cue-buttons` enables the Pi's internal pull-up via libgpiod
 - If your buttons are wired active-high, run `pitg-cue-buttons` with `-H`
 
 RS-485 line side:
