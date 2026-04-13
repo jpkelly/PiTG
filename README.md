@@ -17,6 +17,7 @@ It now contains two runtime outputs:
 - [2) Protocol Output (`pitg-gpio`)](#2-protocol-output-pitg-gpio)
 - [Recommended Split (Limitimer Critical, PerfectCue Occasional)](#recommended-split-limitimer-critical-perfectcue-occasional)
 - [Raspberry Pi 1 Wiring (Split Mode)](#raspberry-pi-1-wiring-split-mode)
+  - [RJ45 Connector Wiring (Limitimer / PerfectCue)](#rj45-connector-wiring-limitimer--perfectcue)
 - [Wiring Verification (Debug First)](#wiring-verification-debug-first)
 - [Protocol Payload Templates](#protocol-payload-templates)
 - [Install And Enable Services](#install-and-enable-services)
