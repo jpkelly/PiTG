@@ -225,13 +225,13 @@ flowchart LR
         PA[A +]
         PB[B -]
     end
-    P2 & P6 --> PA
+    P2 & P7 --> PA
     P4 & P5 --> PB
 ```
 
 Pin groups shown in the diagram:
 - Limitimer socket: `3 + 6` to `A (+)`, and `4 + 5` to `B (-)`.
-- PerfectCue socket: `2 + 6` to `A (+)`, and `4 + 5` to `B (-)`.
+- PerfectCue socket: `2 + 7` to `A (+)`, and `4 + 5` to `B (-)`.
 
 ### Wiring Diagram (with Buttons)
 
