@@ -5,7 +5,7 @@ After=multi-user.target
 [Service]
 Type=simple
 EnvironmentFile=-/etc/default/pitg-gpio
-ExecStart=/bin/sh -c '/usr/local/bin/pitg-gpio ${PITG_GPIO_OPTS:--p both -u /dev/ttyAMA0 -q 18 -x next -b 19200 -i 250 -c 0}'
+ExecStart=/bin/sh -c '/usr/local/bin/pitg-gpio ${PITG_GPIO_OPTS:--p limitimer -u /dev/ttyAMA0 -b 19200 -i 250 -c 0}'
 Restart=always
 RestartSec=2
 User=root

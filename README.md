@@ -76,7 +76,7 @@ Supported protocol modes:
 - `perfectcue`
 - `both`
 
-Run defaults (both protocols):
+Run defaults (Limitimer stream):
 
 ```bash
 ./pitg-gpio
@@ -115,6 +115,9 @@ Example service options for Limitimer stream on Pi 1 UART:
 ```bash
 PITG_GPIO_OPTS="-p limitimer -u /dev/ttyAMA0 -b 19200 -i 250 -c 0"
 ```
+
+When using `pitg-cue-buttons.service`, keep `pitg-gpio.service` in Limitimer-only mode
+so GPIO18 is not double-claimed.
 
 Example occasional PerfectCue commands:
 
@@ -319,7 +322,7 @@ GPIO protocol service config:
 Default GPIO service options:
 
 ```bash
-PITG_GPIO_OPTS="-p both -u /dev/ttyAMA0 -q 18 -x next -b 19200 -i 250 -c 0"
+PITG_GPIO_OPTS="-p limitimer -u /dev/ttyAMA0 -b 19200 -i 250 -c 0"
 ```
 
 Restart after changes:

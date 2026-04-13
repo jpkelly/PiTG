@@ -44,7 +44,7 @@ typedef enum {
 
 typedef struct {
     int pin;
-    struct gpiod_line *line;
+    struct gpiod_line_request *req;
 } gpio_output_t;
 
 static void on_signal(int sig)
@@ -117,16 +117,16 @@ static void timespec_add_ns(struct timespec *ts, long ns)
     }
 }
 
-static int line_write(struct gpiod_line *line, int value)
+static int line_write(gpio_output_t *out, int value)
 {
-    if (gpiod_line_set_value(line, value) < 0) {
+    if (gpiod_line_request_set_value(out->req, (unsigned int)out->pin, value) < 0) {
         fprintf(stderr, "pitg-gpio: gpio write failed: %s\\n", strerror(errno));
         return -1;
     }
     return 0;
 }
 
-static int uart_send_byte(struct gpiod_line *line, uint8_t b, long bit_ns)
+static int uart_send_byte(gpio_output_t *out, uint8_t b, long bit_ns)
 {
     struct timespec t;
     if (clock_gettime(CLOCK_MONOTONIC, &t) != 0) {
@@ -135,30 +135,30 @@ static int uart_send_byte(struct gpiod_line *line, uint8_t b, long bit_ns)
     }
 
     /* Start bit (low) */
-    if (line_write(line, 0) < 0) return -1;
+    if (line_write(out, 0) < 0) return -1;
     timespec_add_ns(&t, bit_ns);
     clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &t, NULL);
 
     /* 8 data bits, LSB first */
     for (int i = 0; i < 8; i++) {
         int bit = (b >> i) & 0x01;
-        if (line_write(line, bit) < 0) return -1;
+        if (line_write(out, bit) < 0) return -1;
         timespec_add_ns(&t, bit_ns);
         clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &t, NULL);
     }
 
     /* Stop bit (high) */
-    if (line_write(line, 1) < 0) return -1;
+    if (line_write(out, 1) < 0) return -1;
     timespec_add_ns(&t, bit_ns);
     clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &t, NULL);
     return 0;
 }
 
-static int uart_send_bytes(struct gpiod_line *line, const uint8_t *bytes,
+static int uart_send_bytes(gpio_output_t *out, const uint8_t *bytes,
                            size_t len, long bit_ns)
 {
     for (size_t i = 0; i < len; i++) {
-        if (uart_send_byte(line, bytes[i], bit_ns) < 0)
+        if (uart_send_byte(out, bytes[i], bit_ns) < 0)
             return -1;
     }
     return 0;
@@ -244,18 +244,57 @@ static uint8_t perfectcue_command_byte(perfectcue_cmd_t cmd)
 
 static int request_output_line(struct gpiod_chip *chip, int pin, gpio_output_t *out)
 {
+    struct gpiod_line_settings *settings = NULL;
+    struct gpiod_line_config *line_cfg = NULL;
+    struct gpiod_request_config *req_cfg = NULL;
+    unsigned int offset;
+
     out->pin = pin;
-    out->line = gpiod_chip_get_line(chip, pin);
-    if (!out->line) {
-        fprintf(stderr, "pitg-gpio: failed to get GPIO line %d\\n", pin);
+    out->req = NULL;
+
+    settings = gpiod_line_settings_new();
+    line_cfg = gpiod_line_config_new();
+    req_cfg = gpiod_request_config_new();
+    if (!settings || !line_cfg || !req_cfg) {
+        fprintf(stderr, "pitg-gpio: failed to allocate gpiod settings/config\n");
+        if (settings) gpiod_line_settings_free(settings);
+        if (line_cfg) gpiod_line_config_free(line_cfg);
+        if (req_cfg) gpiod_request_config_free(req_cfg);
         return -1;
     }
 
-    if (gpiod_line_request_output(out->line, "pitg-gpio", 1) < 0) {
-        fprintf(stderr, "pitg-gpio: failed to request GPIO line %d as output: %s\\n",
-                pin, strerror(errno));
+    if (gpiod_line_settings_set_direction(settings, GPIOD_LINE_DIRECTION_OUTPUT) < 0 ||
+        gpiod_line_settings_set_output_value(settings, GPIOD_LINE_VALUE_ACTIVE) < 0) {
+        fprintf(stderr, "pitg-gpio: failed to configure line settings: %s\n", strerror(errno));
+        gpiod_line_settings_free(settings);
+        gpiod_line_config_free(line_cfg);
+        gpiod_request_config_free(req_cfg);
         return -1;
     }
+
+    offset = (unsigned int)pin;
+    if (gpiod_line_config_add_line_settings(line_cfg, &offset, 1, settings) < 0) {
+        fprintf(stderr, "pitg-gpio: failed to add line settings for GPIO %d: %s\n", pin, strerror(errno));
+        gpiod_line_settings_free(settings);
+        gpiod_line_config_free(line_cfg);
+        gpiod_request_config_free(req_cfg);
+        return -1;
+    }
+
+    gpiod_request_config_set_consumer(req_cfg, "pitg-gpio");
+    out->req = gpiod_chip_request_lines(chip, req_cfg, line_cfg);
+    if (!out->req) {
+        fprintf(stderr, "pitg-gpio: failed to request GPIO line %d as output: %s\n",
+                pin, strerror(errno));
+        gpiod_line_settings_free(settings);
+        gpiod_line_config_free(line_cfg);
+        gpiod_request_config_free(req_cfg);
+        return -1;
+    }
+
+    gpiod_line_settings_free(settings);
+    gpiod_line_config_free(line_cfg);
+    gpiod_request_config_free(req_cfg);
     return 0;
 }
 
@@ -460,7 +499,9 @@ int main(int argc, char **argv)
     }
 
     if (need_any_gpio) {
-        chip = gpiod_chip_open_by_number(chip_index);
+        char chip_path[64];
+        snprintf(chip_path, sizeof(chip_path), "/dev/gpiochip%d", chip_index);
+        chip = gpiod_chip_open(chip_path);
         if (!chip) {
             fprintf(stderr, "pitg-gpio: failed to open gpiochip%d: %s\\n",
                     chip_index, strerror(errno));
@@ -479,7 +520,7 @@ int main(int argc, char **argv)
 
     if (need_perfectcue &&
         request_output_line(chip, gpio_perfectcue, &out_pc) < 0) {
-        if (out_lt.line) gpiod_line_release(out_lt.line);
+        if (out_lt.req) gpiod_line_request_release(out_lt.req);
         if (chip) gpiod_chip_close(chip);
         if (limitimer_uart_fd >= 0) close(limitimer_uart_fd);
         return 1;
@@ -495,11 +536,11 @@ int main(int argc, char **argv)
 
     if (limitimer_uart_fd >= 0)
         fprintf(stderr, "pitg-gpio: limitimer UART=%s\\n", limitimer_uart);
-    if (out_lt.line)
+    if (out_lt.req)
         fprintf(stderr, "pitg-gpio: limitimer GPIO=%d\\n", out_lt.pin);
-    if (out_pc.line)
+    if (out_pc.req)
         fprintf(stderr, "pitg-gpio: perfectcue GPIO=%d\\n", out_pc.pin);
-    if (out_pc.line)
+    if (out_pc.req)
         fprintf(stderr, "pitg-gpio: perfectcue command=0x%02X\\n",
                 (unsigned int)perfectcue_command_byte(pc_cmd));
 
@@ -517,15 +558,15 @@ int main(int argc, char **argv)
                     fprintf(stderr, "pitg-gpio: UART write failed: %s\\n", strerror(errno));
                     break;
                 }
-            } else if (out_lt.line) {
-                if (uart_send_bytes(out_lt.line, frame, frame_len, bit_ns) < 0)
+            } else if (out_lt.req) {
+                if (uart_send_bytes(&out_lt, frame, frame_len, bit_ns) < 0)
                     break;
             }
         }
 
-        if (out_pc.line) {
+        if (out_pc.req) {
             frame[0] = perfectcue_command_byte(pc_cmd);
-            if (uart_send_bytes(out_pc.line, frame, 1, bit_ns) < 0)
+            if (uart_send_bytes(&out_pc, frame, 1, bit_ns) < 0)
                 break;
         }
 
@@ -541,13 +582,13 @@ int main(int argc, char **argv)
     }
     }
 
-    if (out_lt.line) {
-        line_write(out_lt.line, 1);
-        gpiod_line_release(out_lt.line);
+    if (out_lt.req) {
+        line_write(&out_lt, 1);
+        gpiod_line_request_release(out_lt.req);
     }
-    if (out_pc.line) {
-        line_write(out_pc.line, 1);
-        gpiod_line_release(out_pc.line);
+    if (out_pc.req) {
+        line_write(&out_pc, 1);
+        gpiod_line_request_release(out_pc.req);
     }
     if (chip)
         gpiod_chip_close(chip);
