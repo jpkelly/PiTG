@@ -17,6 +17,7 @@ It now contains two runtime outputs:
 - [2) Protocol Output (`pitg-gpio`)](#2-protocol-output-pitg-gpio)
 - [Recommended Split (Limitimer Critical, PerfectCue Occasional)](#recommended-split-limitimer-critical-perfectcue-occasional)
 - [Raspberry Pi 1 Wiring (Split Mode)](#raspberry-pi-1-wiring-split-mode)
+  - [RS-485 Board Connections](#rs-485-board-connections)
   - [RJ45 Connector Wiring (Limitimer / PerfectCue)](#rj45-connector-wiring-limitimer--perfectcue)
   - [Wiring Diagram (with Buttons)](#wiring-diagram-with-buttons)
   - [Pin 13 Ambiguity (Pi 1)](#pin-13-ambiguity-pi-1)
@@ -185,6 +186,34 @@ RS-485 line side:
 
 - Transceiver #1 A/B -> Limitimer A/B
 - Transceiver #2 A/B -> PerfectCue A/B
+
+### RS-485 Board Connections
+
+These boards auto-switch direction (no DE/RE wiring needed). Use 5V for VCC.
+
+**Limitimer** — RS-485 board → UART `/dev/ttyAMA0`:
+
+| Board pin | Connect to |
+|---|---|
+| **TXD** | Pi pin 8 (GPIO14 / TXD0) |
+| **RXD** | leave unconnected |
+| **VCC** | Pi pin 2 (5V) |
+| **GND** | Pi pin 6 (GND) |
+| **A+** | RJ45 Limitimer A pins (3 + 6) |
+| **B-** | RJ45 Limitimer B pins (4 + 5) |
+| **接大地** | leave unconnected |
+
+**PerfectCue** — RS-485 board → GPIO18:
+
+| Board pin | Connect to |
+|---|---|
+| **TXD** | Pi pin 12 (GPIO18) |
+| **RXD** | leave unconnected |
+| **VCC** | Pi pin 2 (5V) |
+| **GND** | Pi pin 6 (GND) |
+| **A+** | RJ45 PerfectCue A pins (2 + 7) |
+| **B-** | RJ45 PerfectCue B pins (4 + 5) |
+| **接大地** | leave unconnected |
 
 ### RJ45 Connector Wiring (Limitimer / PerfectCue)
 
