@@ -194,10 +194,14 @@ Use this when building RJ45 breakout/cable adapters for DSAN bus devices. Each d
 flowchart LR
     subgraph LIM_RJ45[Limitimer RJ45 Socket]
         direction TB
-        L3[Pin 3 · A D+]
-        L6[Pin 6 · A D+]
-        L4[Pin 4 · B D-]
-        L5[Pin 5 · B D-]
+		L1[Pin 1 · +12V · NC]
+		L2[Pin 2 · +12V · NC]
+		L3[Pin 3 · A D+]
+		L4[Pin 4 · B D-]
+		L5[Pin 5 · B D-]
+		L6[Pin 6 · A D+]
+		L7[Pin 7 · unused · NC]
+		L8[Pin 8 · +12V · NC]
     end
     subgraph LIM_XCVR[TTL→RS485 · ttyAMA0]
         LA[A +]
@@ -208,10 +212,14 @@ flowchart LR
 
     subgraph PC_RJ45[PerfectCue RJ45 Socket]
         direction TB
-        P3[Pin 3 · A D+]
-        P6[Pin 6 · A D+]
-        P4[Pin 4 · B D-]
-        P5[Pin 5 · B D-]
+		P1[Pin 1 · +12V · NC]
+		P2[Pin 2 · +12V · NC]
+		P3[Pin 3 · A D+]
+		P4[Pin 4 · B D-]
+		P5[Pin 5 · B D-]
+		P6[Pin 6 · A D+]
+		P7[Pin 7 · unused · NC]
+		P8[Pin 8 · +12V · NC]
     end
     subgraph PC_XCVR[TTL→RS485 · GPIO18]
         PA[A +]
