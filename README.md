@@ -7,6 +7,23 @@ It now contains two runtime outputs:
 - `pitg`: SMPTE LTC over analog audio (3.5mm jack) using ALSA + libltc
 - `pitg-gpio`: Limitimer/PerfectCue protocol output with split transport support
 
+## Table of Contents
+
+- [Plan of Action (Wiring)](#plan-of-action-wiring)
+- [Why This Fork](#why-this-fork)
+- [Requirements](#requirements)
+- [Build](#build)
+- [1) LTC Audio Generator (`pitg`)](#1-ltc-audio-generator-pitg)
+- [2) Protocol Output (`pitg-gpio`)](#2-protocol-output-pitg-gpio)
+- [Recommended Split (Limitimer Critical, PerfectCue Occasional)](#recommended-split-limitimer-critical-perfectcue-occasional)
+- [Raspberry Pi 1 Wiring (Split Mode)](#raspberry-pi-1-wiring-split-mode)
+- [Wiring Verification (Debug First)](#wiring-verification-debug-first)
+- [Protocol Payload Templates](#protocol-payload-templates)
+- [Install And Enable Services](#install-and-enable-services)
+- [Service Configuration](#service-configuration)
+- [Harness Helper](#harness-helper)
+- [Notes For Raspberry Pi 1](#notes-for-raspberry-pi-1)
+
 ## Plan of Action (Wiring)
 
 1. Limitimer path: pin 8 (GPIO14/TXD0) -> RS-485 DI, plus GND, then A/B to Limitimer.
@@ -165,6 +182,28 @@ RS-485 line side:
 
 - Transceiver #1 A/B -> Limitimer A/B
 - Transceiver #2 A/B -> PerfectCue A/B
+
+### RJ45 Connector Wiring (Limitimer / PerfectCue)
+
+Use this when building RJ45 breakout/cable adapters for DSAN bus devices.
+
+RJ45 pinout (device-side bus):
+
+1. `+12V`
+2. `B (D-)`
+3. `A (D+)`
+4. `GND`
+5. `GND`
+6. `A (D+)`
+7. `B (D-)`
+8. `+12V`
+
+Practical hookup to your RS-485 transceiver:
+
+- Transceiver `A` -> RJ45 pin `3` (or `6`)
+- Transceiver `B` -> RJ45 pin `2` (or `7`)
+- Transceiver `GND` -> RJ45 pin `4` or `5` (recommended reference)
+- Do not feed RJ45 `+12V` (pins `1`/`8`) into Pi GPIO or logic-side transceiver pins
 
 ### Wiring Diagram (with Buttons)
 
