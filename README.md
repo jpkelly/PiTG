@@ -190,48 +190,19 @@ RS-485 line side:
 
 Use this when building RJ45 breakout/cable adapters for DSAN bus devices. Each device gets its own RS-485 transceiver board and its own RJ45 cable. The pin routing below follows the reference diagram exactly.
 
-```mermaid
-flowchart TB
-    subgraph LEFT[Limitimer]
-        direction LR
-        subgraph LIM_RJ45[RJ45 Socket]
-            direction TB
-            L1[Pin 1]
-            L2[Pin 2]
-            L3[Pin 3]
-            L4[Pin 4]
-            L5[Pin 5]
-            L6[Pin 6]
-            L7[Pin 7]
-            L8[Pin 8]
-        end
-        subgraph LIM_XCVR[TTL→RS485 · ttyAMA0]
-            LA[A +]
-            LB[B -]
-        end
-        L3 & L6 --> LA
-        L4 & L5 --> LB
-    end
-    subgraph RIGHT[PerfectCue]
-        direction LR
-        subgraph PC_RJ45[RJ45 Socket]
-            direction TB
-            P1[Pin 1]
-            P2[Pin 2]
-            P3[Pin 3]
-            P4[Pin 4]
-            P5[Pin 5]
-            P6[Pin 6]
-            P7[Pin 7]
-            P8[Pin 8]
-        end
-        subgraph PC_XCVR[TTL→RS485 · GPIO18]
-            PA[A +]
-            PB[B -]
-        end
-        P2 & P7 --> PA
-        P4 & P5 --> PB
-    end
+```
+  Limitimer RJ45              TTL→RS485          PerfectCue RJ45             TTL→RS485
+  ┌──────────┐               ┌───────┐          ┌──────────┐               ┌───────┐
+  │ Pin 1    │               │       │          │ Pin 1    │               │       │
+  │ Pin 2    │               │       │          │ Pin 2    ├───────────────┤ A (+) │
+  │ Pin 3    ├───────────────┤ A (+) │          │ Pin 3    │               │       │
+  │ Pin 4    ├───────────────┤ B (-) │          │ Pin 4    ├───────────────┤ B (-) │
+  │ Pin 5    ├───────────────┤ B (-) │          │ Pin 5    ├───────────────┤ B (-) │
+  │ Pin 6    ├───────────────┤ A (+) │          │ Pin 6    │               │       │
+  │ Pin 7    │               │       │          │ Pin 7    ├───────────────┤ A (+) │
+  │ Pin 8    │               │       │          │ Pin 8    │               │       │
+  └──────────┘               └───────┘          └──────────┘               └───────┘
+                          ttyAMA0                                        GPIO18
 ```
 
 Pin groups shown in the diagram:
