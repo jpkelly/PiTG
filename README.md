@@ -190,32 +190,36 @@ RS-485 line side:
 
 Use this when building RJ45 breakout/cable adapters for DSAN bus devices.
 
-RJ45 pinout (device-side bus) — same for both Limitimer and PerfectCue:
+RJ45 pinout (device-side bus) — same connector for both Limitimer and PerfectCue:
 
-1. `+12V`
-2. `B (D-)`
-3. `A (D+)`
-4. `GND`
-5. `GND`
-6. `A (D+)`
-7. `B (D-)`
-8. `+12V`
+| Pin | Signal    |
+|-----|-----------|
+| 1   | +12V (do not connect to Pi harness) |
+| 2   | +12V (do not connect to Pi harness) |
+| 3   | A (D+)    |
+| 4   | B (D-)    |
+| 5   | B (D-)    |
+| 6   | A (D+)    |
+| 7   | (unused)  |
+| 8   | +12V (do not connect to Pi harness) |
+
+Pins 3 and 6 are both A (D+); pins 4 and 5 are both B (D-). Use whichever pair is most convenient for your cable/breakout build.
 
 **Limitimer hookup** (RS-485 transceiver on `/dev/ttyAMA0`, pin 8 / GPIO14):
 
-- Transceiver `A` -> RJ45 pin `3` (or `6`)
-- Transceiver `B` -> RJ45 pin `2` (or `7`)
+- Transceiver `A` -> RJ45 pin `3`
+- Transceiver `B` -> RJ45 pin `4` (or `5`)
 - Transceiver `GND` -> RJ45 pin `4` or `5`
-- **Do not connect** RJ45 pins `1` or `8` (`+12V`) — leave them unconnected on the Pi harness
+- **Do not connect** RJ45 pins `1`, `2`, or `8` (`+12V`)
 
 **PerfectCue hookup** (RS-485 transceiver on GPIO18, pin 12):
 
-- Transceiver `A` -> RJ45 pin `3` (or `6`)
-- Transceiver `B` -> RJ45 pin `2` (or `7`)
+- Transceiver `A` -> RJ45 pin `6`
+- Transceiver `B` -> RJ45 pin `5` (or `4`)
 - Transceiver `GND` -> RJ45 pin `4` or `5`
-- **Do not connect** RJ45 pins `1` or `8` (`+12V`) — leave them unconnected on the Pi harness
+- **Do not connect** RJ45 pins `1`, `2`, or `8` (`+12V`)
 
-Each device gets its own RS-485 transceiver board and its own RJ45 cable. Connect only `A`, `B`, and `GND` on the RJ45 side for both.
+Each device gets its own RS-485 transceiver board and its own RJ45 cable.
 
 ### Wiring Diagram (with Buttons)
 
