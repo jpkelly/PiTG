@@ -198,12 +198,14 @@ RJ45 pinout (device-side bus):
 7. `B (D-)`
 8. `+12V`
 
-Practical hookup to your RS-485 transceiver:
+Practical hookup to your RS-485 transceiver (Pi harness side):
 
 - Transceiver `A` -> RJ45 pin `3` (or `6`)
 - Transceiver `B` -> RJ45 pin `2` (or `7`)
-- Transceiver `GND` -> RJ45 pin `4` or `5` (recommended reference)
-- Do not feed RJ45 `+12V` (pins `1`/`8`) into Pi GPIO or logic-side transceiver pins
+- Transceiver `GND` -> RJ45 pin `4` or `5`
+- **Do not connect** RJ45 pins `1` or `8` (`+12V`) — leave them unconnected on the Pi harness
+
+For this Pi setup, connect only `A`, `B`, and `GND` on the RJ45 side.
 
 ### Wiring Diagram (with Buttons)
 
