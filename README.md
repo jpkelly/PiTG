@@ -7,6 +7,16 @@ It now contains two runtime outputs:
 - `pitg`: SMPTE LTC over analog audio (3.5mm jack) using ALSA + libltc
 - `pitg-gpio`: Limitimer/PerfectCue protocol output with split transport support
 
+## Plan of Action (Wiring)
+
+1. Limitimer path: pin 8 (GPIO14/TXD0) -> RS-485 DI, plus GND, then A/B to Limitimer.
+2. PerfectCue path: pin 12 (GPIO18) -> RS-485 DI, plus GND, then A/B to PerfectCue.
+3. Buttons: NEXT pin 16 (GPIO23) to GND, PREV pin 18 (GPIO24) to GND.
+4. Manual DE/RE boards: set DE=HIGH and RE=HIGH (TX-only).
+5. Start and check: `sudo pitg-harnessctl status`.
+6. Test order: confirm Limitimer stream, then press NEXT/PREV and verify cue reception.
+7. If no comms: swap A/B, confirm `19200 8N1`, recheck shared ground and termination.
+
 ## Why This Fork
 
 You asked for a project fork that can output both Limitimer protocol and PerfectCue protocol on Raspberry Pi 1.
