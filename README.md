@@ -188,7 +188,38 @@ RS-485 line side:
 
 ### RJ45 Connector Wiring (Limitimer / PerfectCue)
 
-Use this when building RJ45 breakout/cable adapters for DSAN bus devices. Each device gets its own RS-485 transceiver board and its own RJ45 cable.
+Use this when building RJ45 breakout/cable adapters for DSAN bus devices. Each device gets its own RS-485 transceiver board and its own RJ45 cable. Pins 3 & 6 share the A (D+) wire; pins 4 & 5 share the B (D−) wire — four terminations, two signals.
+
+```mermaid
+flowchart LR
+    subgraph LIM_RJ45[Limitimer RJ45 Socket]
+        direction TB
+        L3[Pin 3 · A D+]
+        L6[Pin 6 · A D+]
+        L4[Pin 4 · B D-]
+        L5[Pin 5 · B D-]
+    end
+    subgraph LIM_XCVR[TTL→RS485 · ttyAMA0]
+        LA[A +]
+        LB[B -]
+    end
+    L3 & L6 --> LA
+    L4 & L5 --> LB
+
+    subgraph PC_RJ45[PerfectCue RJ45 Socket]
+        direction TB
+        P3[Pin 3 · A D+]
+        P6[Pin 6 · A D+]
+        P4[Pin 4 · B D-]
+        P5[Pin 5 · B D-]
+    end
+    subgraph PC_XCVR[TTL→RS485 · GPIO18]
+        PA[A +]
+        PB[B -]
+    end
+    P3 & P6 --> PA
+    P4 & P5 --> PB
+```
 
 **Limitimer** — RS-485 transceiver → `/dev/ttyAMA0` (Pi pin 8 / GPIO14):
 
@@ -198,8 +229,8 @@ Use this when building RJ45 breakout/cable adapters for DSAN bus devices. Each d
 | 2 | +12V | — do not connect |
 | 3 | A (D+) | Transceiver A |
 | 4 | B (D-) | Transceiver B |
-| 5 | B (D-) | Transceiver B |
-| 6 | A (D+) | Transceiver A |
+| 5 | B (D-) | Transceiver B (shares wire with pin 4) |
+| 6 | A (D+) | Transceiver A (shares wire with pin 3) |
 | 7 | (unused) | — do not connect |
 | 8 | +12V | — do not connect |
 
@@ -211,8 +242,8 @@ Use this when building RJ45 breakout/cable adapters for DSAN bus devices. Each d
 | 2 | +12V | — do not connect |
 | 3 | A (D+) | Transceiver A |
 | 4 | B (D-) | Transceiver B |
-| 5 | B (D-) | Transceiver B |
-| 6 | A (D+) | Transceiver A |
+| 5 | B (D-) | Transceiver B (shares wire with pin 4) |
+| 6 | A (D+) | Transceiver A (shares wire with pin 3) |
 | 7 | (unused) | — do not connect |
 | 8 | +12V | — do not connect |
 
