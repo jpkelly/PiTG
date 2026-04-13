@@ -56,17 +56,17 @@ static void on_signal(int sig)
 static void usage(const char *prog)
 {
     fprintf(stderr,
-            "Usage: %s [-p protocol] [-u limitimer_uart] [-g limitimer_gpio] [-q perfectcue_gpio]\\n"
-            "          [-x pc_cmd] [-b baud] [-i interval_ms] [-c chip_index] [-1]\\n\\n"
-            "  -p  protocol: limitimer | perfectcue | both (default: both)\\n"
-            "  -u  UART device for limitimer output (example: /dev/ttyAMA0)\\n"
-            "  -g  GPIO pin for limitimer output (default: 17)\\n"
-            "  -q  GPIO pin for perfectcue output (default: 18)\\n"
-            "  -x  perfectcue command: next | prev | blank-off | blank-on (default: next)\\n"
-            "  -b  UART bit rate in baud (default: 19200)\\n"
-            "  -i  frame interval in milliseconds (default: 1000)\\n"
-            "  -c  GPIO chip index (default: 0 -> /dev/gpiochip0)\\n"
-            "  -1  oneshot: send one frame/event and exit\\n",
+            "Usage: %s [-p protocol] [-u limitimer_uart] [-g limitimer_gpio] [-q perfectcue_gpio]\n"
+            "          [-x pc_cmd] [-b baud] [-i interval_ms] [-c chip_index] [-1]\\n\n"
+            "  -p  protocol: limitimer | perfectcue | both (default: both)\n"
+            "  -u  UART device for limitimer output (example: /dev/ttyAMA0)\n"
+            "  -g  GPIO pin for limitimer output (default: 17)\n"
+            "  -q  GPIO pin for perfectcue output (default: 18)\n"
+            "  -x  perfectcue command: next | prev | blank-off | blank-on (default: next)\n"
+            "  -b  UART bit rate in baud (default: 19200)\n"
+            "  -i  frame interval in milliseconds (default: 1000)\n"
+            "  -c  GPIO chip index (default: 0 -> /dev/gpiochip0)\n"
+            "  -1  oneshot: send one frame/event and exit\n",
             prog);
 }
 
@@ -120,7 +120,7 @@ static void timespec_add_ns(struct timespec *ts, long ns)
 static int line_write(gpio_output_t *out, int value)
 {
     if (gpiod_line_request_set_value(out->req, (unsigned int)out->pin, value) < 0) {
-        fprintf(stderr, "pitg-gpio: gpio write failed: %s\\n", strerror(errno));
+        fprintf(stderr, "pitg-gpio: gpio write failed: %s\n", strerror(errno));
         return -1;
     }
     return 0;
@@ -130,7 +130,7 @@ static int uart_send_byte(gpio_output_t *out, uint8_t b, long bit_ns)
 {
     struct timespec t;
     if (clock_gettime(CLOCK_MONOTONIC, &t) != 0) {
-        fprintf(stderr, "pitg-gpio: clock_gettime failed: %s\\n", strerror(errno));
+        fprintf(stderr, "pitg-gpio: clock_gettime failed: %s\n", strerror(errno));
         return -1;
     }
 
@@ -318,18 +318,18 @@ static int open_uart_port(const char *dev, int baud)
 
     speed = baud_to_speed(baud);
     if (speed == 0) {
-        fprintf(stderr, "pitg-gpio: unsupported UART baud %d (use 9600/19200/38400/57600/115200)\\n", baud);
+        fprintf(stderr, "pitg-gpio: unsupported UART baud %d (use 9600/19200/38400/57600/115200)\n", baud);
         return -1;
     }
 
     fd = open(dev, O_RDWR | O_NOCTTY);
     if (fd < 0) {
-        fprintf(stderr, "pitg-gpio: failed to open UART %s: %s\\n", dev, strerror(errno));
+        fprintf(stderr, "pitg-gpio: failed to open UART %s: %s\n", dev, strerror(errno));
         return -1;
     }
 
     if (tcgetattr(fd, &tio) != 0) {
-        fprintf(stderr, "pitg-gpio: tcgetattr(%s) failed: %s\\n", dev, strerror(errno));
+        fprintf(stderr, "pitg-gpio: tcgetattr(%s) failed: %s\n", dev, strerror(errno));
         close(fd);
         return -1;
     }
@@ -342,13 +342,13 @@ static int open_uart_port(const char *dev, int baud)
     tio.c_cflag |= CS8;
 
     if (cfsetispeed(&tio, speed) != 0 || cfsetospeed(&tio, speed) != 0) {
-        fprintf(stderr, "pitg-gpio: setting UART speed failed for %s: %s\\n", dev, strerror(errno));
+        fprintf(stderr, "pitg-gpio: setting UART speed failed for %s: %s\n", dev, strerror(errno));
         close(fd);
         return -1;
     }
 
     if (tcsetattr(fd, TCSANOW, &tio) != 0) {
-        fprintf(stderr, "pitg-gpio: tcsetattr(%s) failed: %s\\n", dev, strerror(errno));
+        fprintf(stderr, "pitg-gpio: tcsetattr(%s) failed: %s\n", dev, strerror(errno));
         close(fd);
         return -1;
     }
@@ -389,7 +389,7 @@ int main(int argc, char **argv)
         case 'p': {
             protocol_mode_t p = parse_protocol(optarg);
             if ((int)p < 0) {
-                fprintf(stderr, "pitg-gpio: invalid protocol '%s'\\n", optarg);
+                fprintf(stderr, "pitg-gpio: invalid protocol '%s'\n", optarg);
                 usage(argv[0]);
                 return 1;
             }
@@ -402,41 +402,41 @@ int main(int argc, char **argv)
         case 'g':
             gpio_limitimer = parse_int_arg(optarg, 0, 53);
             if (gpio_limitimer < 0) {
-                fprintf(stderr, "pitg-gpio: invalid limitimer GPIO '%s'\\n", optarg);
+                fprintf(stderr, "pitg-gpio: invalid limitimer GPIO '%s'\n", optarg);
                 return 1;
             }
             break;
         case 'q':
             gpio_perfectcue = parse_int_arg(optarg, 0, 53);
             if (gpio_perfectcue < 0) {
-                fprintf(stderr, "pitg-gpio: invalid perfectcue GPIO '%s'\\n", optarg);
+                fprintf(stderr, "pitg-gpio: invalid perfectcue GPIO '%s'\n", optarg);
                 return 1;
             }
             break;
         case 'x':
             if (parse_perfectcue_cmd(optarg, &pc_cmd) != 0) {
-                fprintf(stderr, "pitg-gpio: invalid perfectcue command '%s'\\n", optarg);
+                fprintf(stderr, "pitg-gpio: invalid perfectcue command '%s'\n", optarg);
                 return 1;
             }
             break;
         case 'b':
             baud = parse_int_arg(optarg, 300, 1000000);
             if (baud < 0) {
-                fprintf(stderr, "pitg-gpio: invalid baud '%s'\\n", optarg);
+                fprintf(stderr, "pitg-gpio: invalid baud '%s'\n", optarg);
                 return 1;
             }
             break;
         case 'i':
             interval_ms = parse_int_arg(optarg, 1, 60000);
             if (interval_ms < 0) {
-                fprintf(stderr, "pitg-gpio: invalid interval '%s'\\n", optarg);
+                fprintf(stderr, "pitg-gpio: invalid interval '%s'\n", optarg);
                 return 1;
             }
             break;
         case 'c':
             chip_index = parse_int_arg(optarg, 0, 15);
             if (chip_index < 0) {
-                fprintf(stderr, "pitg-gpio: invalid chip index '%s'\\n", optarg);
+                fprintf(stderr, "pitg-gpio: invalid chip index '%s'\n", optarg);
                 return 1;
             }
             break;
@@ -460,18 +460,18 @@ int main(int argc, char **argv)
 
         if (limitimer_uses_gpio && perfectcue_uses_gpio && gpio_limitimer == gpio_perfectcue) {
             fprintf(stderr,
-                    "pitg-gpio: GPIO pin conflict: limitimer and perfectcue cannot share the same pin\\n");
+                    "pitg-gpio: GPIO pin conflict: limitimer and perfectcue cannot share the same pin\n");
             return 1;
         }
     }
 
     if (protocol == PROTO_PERFECTCUE && limitimer_uart != NULL) {
-        fprintf(stderr, "pitg-gpio: warning: -u is ignored when protocol is perfectcue only\\n");
+        fprintf(stderr, "pitg-gpio: warning: -u is ignored when protocol is perfectcue only\n");
     }
 
     if (protocol == PROTO_BOTH && limitimer_uart == NULL) {
         fprintf(stderr,
-                "pitg-gpio: info: no -u provided; limitimer will be sent via GPIO bit-banging\\n");
+                "pitg-gpio: info: no -u provided; limitimer will be sent via GPIO bit-banging\n");
     }
 
     long bit_ns = 1000000000L / baud;
@@ -503,7 +503,7 @@ int main(int argc, char **argv)
         snprintf(chip_path, sizeof(chip_path), "/dev/gpiochip%d", chip_index);
         chip = gpiod_chip_open(chip_path);
         if (!chip) {
-            fprintf(stderr, "pitg-gpio: failed to open gpiochip%d: %s\\n",
+            fprintf(stderr, "pitg-gpio: failed to open gpiochip%d: %s\n",
                     chip_index, strerror(errno));
             if (limitimer_uart_fd >= 0)
                 close(limitimer_uart_fd);
@@ -527,21 +527,21 @@ int main(int argc, char **argv)
     }
 
     fprintf(stderr,
-            "pitg-gpio: protocol=%s chip=gpiochip%d baud=%d interval=%dms\\n",
+            "pitg-gpio: protocol=%s chip=gpiochip%d baud=%d interval=%dms\n",
             protocol == PROTO_LIMITIMER ? "limitimer" :
             protocol == PROTO_PERFECTCUE ? "perfectcue" : "both",
             chip_index, baud, interval_ms);
     if (oneshot)
-        fprintf(stderr, "pitg-gpio: oneshot mode enabled\\n");
+        fprintf(stderr, "pitg-gpio: oneshot mode enabled\n");
 
     if (limitimer_uart_fd >= 0)
-        fprintf(stderr, "pitg-gpio: limitimer UART=%s\\n", limitimer_uart);
+        fprintf(stderr, "pitg-gpio: limitimer UART=%s\n", limitimer_uart);
     if (out_lt.req)
-        fprintf(stderr, "pitg-gpio: limitimer GPIO=%d\\n", out_lt.pin);
+        fprintf(stderr, "pitg-gpio: limitimer GPIO=%d\n", out_lt.pin);
     if (out_pc.req)
-        fprintf(stderr, "pitg-gpio: perfectcue GPIO=%d\\n", out_pc.pin);
+        fprintf(stderr, "pitg-gpio: perfectcue GPIO=%d\n", out_pc.pin);
     if (out_pc.req)
-        fprintf(stderr, "pitg-gpio: perfectcue command=0x%02X\\n",
+        fprintf(stderr, "pitg-gpio: perfectcue command=0x%02X\n",
                 (unsigned int)perfectcue_command_byte(pc_cmd));
 
     {
@@ -555,7 +555,7 @@ int main(int argc, char **argv)
             frame_len = build_limitimer_status_packet(frame, seq, elapsed);
             if (limitimer_uart_fd >= 0) {
                 if (write_all(limitimer_uart_fd, frame, frame_len) < 0) {
-                    fprintf(stderr, "pitg-gpio: UART write failed: %s\\n", strerror(errno));
+                    fprintf(stderr, "pitg-gpio: UART write failed: %s\n", strerror(errno));
                     break;
                 }
             } else if (out_lt.req) {
@@ -595,6 +595,6 @@ int main(int argc, char **argv)
     if (limitimer_uart_fd >= 0)
         close(limitimer_uart_fd);
 
-    fprintf(stderr, "pitg-gpio: stopped\\n");
+    fprintf(stderr, "pitg-gpio: stopped\n");
     return 0;
 }

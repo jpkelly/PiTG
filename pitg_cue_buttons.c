@@ -55,15 +55,15 @@ static int parse_int_arg(const char *s, int minv, int maxv)
 static void usage(const char *prog)
 {
     fprintf(stderr,
-            "Usage: %s [-N next_gpio] [-P prev_gpio] [-T tx_gpio]\\n"
-            "          [-B baud] [-D debounce_ms] [-c chip_index] [-H]\\n\\n"
-            "  -N  GPIO input pin for NEXT button (default: 23)\\n"
-            "  -P  GPIO input pin for PREV button (default: 24)\\n"
-            "  -T  GPIO output pin for PerfectCue TX (default: 18)\\n"
-            "  -B  UART bit rate for TX output (default: 19200)\\n"
-            "  -D  debounce time in ms (default: 120)\\n"
-            "  -c  GPIO chip index (default: 0 -> /dev/gpiochip0)\\n"
-            "  -H  buttons are active-high (default is active-low)\\n",
+            "Usage: %s [-N next_gpio] [-P prev_gpio] [-T tx_gpio]\n"
+            "          [-B baud] [-D debounce_ms] [-c chip_index] [-H]\\n\n"
+            "  -N  GPIO input pin for NEXT button (default: 23)\n"
+            "  -P  GPIO input pin for PREV button (default: 24)\n"
+            "  -T  GPIO output pin for PerfectCue TX (default: 18)\n"
+            "  -B  UART bit rate for TX output (default: 19200)\n"
+            "  -D  debounce time in ms (default: 120)\n"
+            "  -c  GPIO chip index (default: 0 -> /dev/gpiochip0)\n"
+            "  -H  buttons are active-high (default is active-low)\n",
             prog);
 }
 
@@ -79,7 +79,7 @@ static void timespec_add_ns(struct timespec *ts, long ns)
 static int line_write(struct gpiod_line_request *req, int gpio, int value)
 {
     if (gpiod_line_request_set_value(req, (unsigned int)gpio, value) < 0) {
-        fprintf(stderr, "pitg-cue-buttons: gpio write failed: %s\\n", strerror(errno));
+        fprintf(stderr, "pitg-cue-buttons: gpio write failed: %s\n", strerror(errno));
         return -1;
     }
     return 0;
@@ -89,7 +89,7 @@ static int uart_send_byte(struct gpiod_line_request *req, int gpio, uint8_t b, l
 {
     struct timespec t;
     if (clock_gettime(CLOCK_MONOTONIC, &t) != 0) {
-        fprintf(stderr, "pitg-cue-buttons: clock_gettime failed: %s\\n", strerror(errno));
+        fprintf(stderr, "pitg-cue-buttons: clock_gettime failed: %s\n", strerror(errno));
         return -1;
     }
 
@@ -232,7 +232,7 @@ int main(int argc, char **argv)
     if (opt.next_gpio == opt.prev_gpio ||
         opt.next_gpio == opt.tx_gpio ||
         opt.prev_gpio == opt.tx_gpio) {
-        fprintf(stderr, "pitg-cue-buttons: button and TX pins must be unique\\n");
+        fprintf(stderr, "pitg-cue-buttons: button and TX pins must be unique\n");
         return 1;
     }
 
@@ -243,7 +243,7 @@ int main(int argc, char **argv)
     snprintf(chip_path, sizeof(chip_path), "/dev/gpiochip%d", opt.chip_index);
     struct gpiod_chip *chip = gpiod_chip_open(chip_path);
     if (!chip) {
-        fprintf(stderr, "pitg-cue-buttons: failed to open gpiochip%d: %s\\n",
+        fprintf(stderr, "pitg-cue-buttons: failed to open gpiochip%d: %s\n",
                 opt.chip_index, strerror(errno));
         return 1;
     }
@@ -271,7 +271,7 @@ int main(int argc, char **argv)
     int prev_prev_state = gpiod_line_request_get_value(req_prev, (unsigned int)opt.prev_gpio);
 
     fprintf(stderr,
-            "pitg-cue-buttons: chip=gpiochip%d next=%d prev=%d tx=%d baud=%d debounce=%dms active_%s\\n",
+            "pitg-cue-buttons: chip=gpiochip%d next=%d prev=%d tx=%d baud=%d debounce=%dms active_%s\n",
             opt.chip_index,
             opt.next_gpio,
             opt.prev_gpio,
@@ -290,7 +290,7 @@ int main(int argc, char **argv)
             int was_pressed = is_pressed(prev_next_state, opt.active_high);
             if (now_pressed && !was_pressed && (t - last_next) >= opt.debounce_ms) {
                 if (uart_send_byte(req_tx, opt.tx_gpio, 0x0F, bit_ns) == 0) {
-                    fprintf(stderr, "pitg-cue-buttons: NEXT -> 0x0F\\n");
+                    fprintf(stderr, "pitg-cue-buttons: NEXT -> 0x0F\n");
                     last_next = t;
                 }
             }
@@ -301,7 +301,7 @@ int main(int argc, char **argv)
             int was_pressed = is_pressed(prev_prev_state, opt.active_high);
             if (now_pressed && !was_pressed && (t - last_prev) >= opt.debounce_ms) {
                 if (uart_send_byte(req_tx, opt.tx_gpio, 0x1F, bit_ns) == 0) {
-                    fprintf(stderr, "pitg-cue-buttons: PREV -> 0x1F\\n");
+                    fprintf(stderr, "pitg-cue-buttons: PREV -> 0x1F\n");
                     last_prev = t;
                 }
             }
@@ -318,6 +318,6 @@ int main(int argc, char **argv)
     gpiod_line_request_release(req_prev);
     gpiod_line_request_release(req_tx);
     gpiod_chip_close(chip);
-    fprintf(stderr, "pitg-cue-buttons: stopped\\n");
+    fprintf(stderr, "pitg-cue-buttons: stopped\n");
     return 0;
 }
