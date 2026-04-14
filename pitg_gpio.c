@@ -27,7 +27,7 @@
 #define DEFAULT_BAUD 19200
 #define DEFAULT_INTERVAL_MS 1000
 #define DEFAULT_TOTAL_SECONDS 600  /* 10:00 */
-#define DEFAULT_SUMUP_SECONDS 60   /* warning at 1:00 remaining */
+#define DEFAULT_SUMUP_SECONDS 180  /* warning at 3:00 remaining */
 
 static volatile sig_atomic_t g_running = 1;
 static volatile sig_atomic_t g_paused  = 0;
@@ -86,7 +86,7 @@ static void usage(const char *prog)
 {
     fprintf(stderr,
             "Usage: %s [-p protocol] [-u limitimer_uart] [-g limitimer_gpio] [-q perfectcue_gpio]\n"
-            "          [-x pc_cmd] [-b baud] [-i interval_ms] [-c chip_index] [-t total] [-T] [-1]\n"
+            "          [-x pc_cmd] [-b baud] [-i interval_ms] [-c chip_index] [-t total] [-o overrun] [-T] [-1]\n"
             "  -p  protocol: limitimer | perfectcue | both (default: both)\n"
             "  -u  UART device for limitimer output (example: /dev/ttyAMA0)\n"
             "  -g  GPIO pin for limitimer output (default: 17)\n"
@@ -96,6 +96,7 @@ static void usage(const char *prog)
             "  -i  frame interval in milliseconds (default: 1000)\n"
             "  -c  GPIO chip index (default: 0 -> /dev/gpiochip0)\n"
             "  -t  countdown total time as MM:SS or seconds (default: 10:00)\n"
+            "  -o  overtime count-up duration as MM:SS or seconds before reset (default: 1:00)\n"
             "  -T  test mode: auto-fire PerfectCue every 10s, alternating next/prev\n"
             "  -1  oneshot: send one frame/event and exit\n"
             "Signals: SIGUSR1 = toggle pause/resume, SIGUSR2 = reset to start\n",
@@ -423,12 +424,13 @@ int main(int argc, char **argv)
     int chip_index = DEFAULT_CHIP_INDEX;
     int total_seconds = DEFAULT_TOTAL_SECONDS;
     int sumup_seconds = DEFAULT_SUMUP_SECONDS;
+    int overrun_seconds = 60; /* count up for this long after zero before resetting */
     int oneshot = 0;
     int test_mode = 0;
     perfectcue_cmd_t pc_cmd = PC_NEXT;
     int opt;
 
-    while ((opt = getopt(argc, argv, "p:u:g:q:x:b:i:c:t:T1h")) != -1) {
+    while ((opt = getopt(argc, argv, "p:u:g:q:x:b:i:c:t:o:T1h")) != -1) {
         switch (opt) {
         case 'p': {
             protocol_mode_t p = parse_protocol(optarg);
@@ -493,6 +495,13 @@ int main(int argc, char **argv)
             /* Keep sumup sensible relative to total */
             if (sumup_seconds >= total_seconds)
                 sumup_seconds = total_seconds > 60 ? 60 : total_seconds / 2;
+            break;
+        case 'o':
+            overrun_seconds = parse_time_arg(optarg);
+            if (overrun_seconds < 1) {
+                fprintf(stderr, "pitg-gpio: invalid overrun time '%s' (use MM:SS or seconds)\n", optarg);
+                return 1;
+            }
             break;
         case 'T':
             test_mode = 1;
@@ -670,8 +679,8 @@ int main(int argc, char **argv)
             if (accum_ms >= 1000) {
                 accum_ms -= 1000;
                 elapsed++;
-                if (elapsed >= total_seconds)
-                    elapsed = 0; /* loop back to start */
+                if (elapsed >= total_seconds + overrun_seconds)
+                    elapsed = 0; /* loop back to start after overrun */
             }
         }
 
