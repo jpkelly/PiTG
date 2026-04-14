@@ -26,8 +26,12 @@
 #define DEFAULT_CHIP_INDEX 0
 #define DEFAULT_BAUD 19200
 #define DEFAULT_INTERVAL_MS 1000
+#define DEFAULT_TOTAL_SECONDS 600  /* 10:00 */
+#define DEFAULT_SUMUP_SECONDS 60   /* warning at 1:00 remaining */
 
 static volatile sig_atomic_t g_running = 1;
+static volatile sig_atomic_t g_paused  = 0;
+static volatile sig_atomic_t g_reset   = 0;
 
 typedef enum {
     PROTO_LIMITIMER = 0,
@@ -53,11 +57,23 @@ static void on_signal(int sig)
     g_running = 0;
 }
 
+static void on_pause(int sig)
+{
+    (void)sig;
+    g_paused = !g_paused;
+}
+
+static void on_reset(int sig)
+{
+    (void)sig;
+    g_reset = 1;
+}
+
 static void usage(const char *prog)
 {
     fprintf(stderr,
             "Usage: %s [-p protocol] [-u limitimer_uart] [-g limitimer_gpio] [-q perfectcue_gpio]\n"
-            "          [-x pc_cmd] [-b baud] [-i interval_ms] [-c chip_index] [-1]\\n\n"
+            "          [-x pc_cmd] [-b baud] [-i interval_ms] [-c chip_index] [-t total] [-1]\\n\n"
             "  -p  protocol: limitimer | perfectcue | both (default: both)\n"
             "  -u  UART device for limitimer output (example: /dev/ttyAMA0)\n"
             "  -g  GPIO pin for limitimer output (default: 17)\n"
@@ -66,7 +82,9 @@ static void usage(const char *prog)
             "  -b  UART bit rate in baud (default: 19200)\n"
             "  -i  frame interval in milliseconds (default: 1000)\n"
             "  -c  GPIO chip index (default: 0 -> /dev/gpiochip0)\n"
-            "  -1  oneshot: send one frame/event and exit\n",
+            "  -t  countdown total time as MM:SS or seconds (default: 10:00)\n"
+            "  -1  oneshot: send one frame/event and exit\n"
+            "Signals: SIGUSR1 = toggle pause/resume, SIGUSR2 = reset to start\n",
             prog);
 }
 
@@ -76,6 +94,19 @@ static protocol_mode_t parse_protocol(const char *s)
     if (strcmp(s, "perfectcue") == 0) return PROTO_PERFECTCUE;
     if (strcmp(s, "both") == 0) return PROTO_BOTH;
     return -1;
+}
+
+static int parse_time_arg(const char *s)
+{
+    int m, sec;
+    if (sscanf(s, "%d:%d", &m, &sec) == 2) {
+        if (m < 0 || sec < 0 || sec >= 60) return -1;
+        return m * 60 + sec;
+    }
+    char *end = NULL;
+    long v = strtol(s, &end, 10);
+    if (!s || *s == '\0' || !end || *end != '\0') return -1;
+    return (v > 0 && v <= 86400) ? (int)v : -1;
 }
 
 static int parse_int_arg(const char *s, int minv, int maxv)
@@ -189,30 +220,26 @@ static void encode_limitimer_time(int seconds, uint8_t out[3])
 }
 
 static size_t build_limitimer_status_packet(uint8_t packet[55], uint8_t seq,
-                                            int elapsed_seconds)
+                                            uint8_t config_low,
+                                            int total_s, int sumup_s,
+                                            int elapsed_s)
 {
     packet[0] = 0x81;
     packet[1] = 0x00;
     packet[2] = 0x00;
-    packet[3] = 0x01;
+    packet[3] = config_low;
     packet[4] = seq;
     packet[5] = 0x00; /* selected timer: program 1 */
 
     for (int i = 0; i < 4; i++) {
         int base = 6 + (11 * i);
-        int total = 600;
-        int sumup = 60;
-        int elapsed = elapsed_seconds;
 
-        if (elapsed > total)
-            elapsed = total;
-
-        packet[base + 0] = 0x01; /* run flag */
+        packet[base + 0] = g_paused ? 0x00 : 0x01; /* run flag: 0=paused, 1=running */
         packet[base + 1] = 0x00; /* unknown byte in reverse-engineered format */
 
-        encode_limitimer_time(total, &packet[base + 2]);
-        encode_limitimer_time(sumup, &packet[base + 5]);
-        encode_limitimer_time(elapsed, &packet[base + 8]);
+        encode_limitimer_time(total_s,   &packet[base + 2]);
+        encode_limitimer_time(sumup_s,   &packet[base + 5]);
+        encode_limitimer_time(elapsed_s, &packet[base + 8]);
     }
 
     packet[50] = 0x00;
@@ -380,11 +407,13 @@ int main(int argc, char **argv)
     int baud = DEFAULT_BAUD;
     int interval_ms = DEFAULT_INTERVAL_MS;
     int chip_index = DEFAULT_CHIP_INDEX;
+    int total_seconds = DEFAULT_TOTAL_SECONDS;
+    int sumup_seconds = DEFAULT_SUMUP_SECONDS;
     int oneshot = 0;
     perfectcue_cmd_t pc_cmd = PC_NEXT;
     int opt;
 
-    while ((opt = getopt(argc, argv, "p:u:g:q:x:b:i:c:1h")) != -1) {
+    while ((opt = getopt(argc, argv, "p:u:g:q:x:b:i:c:t:1h")) != -1) {
         switch (opt) {
         case 'p': {
             protocol_mode_t p = parse_protocol(optarg);
@@ -440,6 +469,16 @@ int main(int argc, char **argv)
                 return 1;
             }
             break;
+        case 't':
+            total_seconds = parse_time_arg(optarg);
+            if (total_seconds < 1) {
+                fprintf(stderr, "pitg-gpio: invalid total time '%s' (use MM:SS or seconds)\n", optarg);
+                return 1;
+            }
+            /* Keep sumup sensible relative to total */
+            if (sumup_seconds >= total_seconds)
+                sumup_seconds = total_seconds > 60 ? 60 : total_seconds / 2;
+            break;
         case '1':
             oneshot = 1;
             break;
@@ -480,8 +519,10 @@ int main(int argc, char **argv)
         .tv_nsec = (interval_ms % 1000) * 1000000L,
     };
 
-    signal(SIGINT, on_signal);
+    signal(SIGINT,  on_signal);
     signal(SIGTERM, on_signal);
+    signal(SIGUSR1, on_pause);
+    signal(SIGUSR2, on_reset);
 
     struct gpiod_chip *chip = NULL;
     gpio_output_t out_lt = {0};
@@ -543,16 +584,26 @@ int main(int argc, char **argv)
     if (out_pc.req)
         fprintf(stderr, "pitg-gpio: perfectcue command=0x%02X\n",
                 (unsigned int)perfectcue_command_byte(pc_cmd));
+    if (need_limitimer)
+        fprintf(stderr, "pitg-gpio: limitimer total=%d:%02d sumup=%d:%02d\n",
+                total_seconds / 60, total_seconds % 60,
+                sumup_seconds / 60, sumup_seconds % 60);
 
     {
         uint8_t seq = 0;
         int elapsed = 0;
+        long accum_ms = 0;
     while (g_running) {
         uint8_t frame[64];
         size_t frame_len = 0;
 
         if (need_limitimer) {
-            frame_len = build_limitimer_status_packet(frame, seq, elapsed);
+            /* Countdown: configCountUp(0x08) → display shows total-elapsed (down arrow)
+             * configProgHours(0x04) → MM:SS display format */
+            uint8_t config_low = 0x0D; /* configCountUp(0x08) | configProgHours(0x04) | 0x01 */
+            frame_len = build_limitimer_status_packet(frame, seq, config_low,
+                                                      total_seconds, sumup_seconds,
+                                                      elapsed);
             if (limitimer_uart_fd >= 0) {
                 if (write_all(limitimer_uart_fd, frame, frame_len) < 0) {
                     fprintf(stderr, "pitg-gpio: UART write failed: %s\n", strerror(errno));
@@ -574,9 +625,21 @@ int main(int argc, char **argv)
             break;
 
         seq++;
-        elapsed++;
-        if (elapsed > 600)
+        if (g_reset) {
             elapsed = 0;
+            accum_ms = 0;
+            g_paused = 0;
+            g_reset = 0;
+        }
+        if (!g_paused) {
+            accum_ms += interval_ms;
+            if (accum_ms >= 1000) {
+                accum_ms -= 1000;
+                elapsed++;
+                if (elapsed >= total_seconds)
+                    elapsed = 0; /* loop back to start */
+            }
+        }
 
         nanosleep(&interval, NULL);
     }
