@@ -589,6 +589,9 @@ int main(int argc, char **argv)
         uint8_t seq = 0;
         int elapsed = 0;
         long accum_ms = 0;
+        unsigned long packets_sent = 0;
+        long status_accum_ms = 0;
+        const long status_interval_ms = 60000; /* log status every 60s */
         struct timespec next;
         clock_gettime(CLOCK_MONOTONIC, &next);
 
@@ -605,7 +608,8 @@ int main(int argc, char **argv)
                                                       elapsed);
             if (limitimer_uart_fd >= 0) {
                 if (write_all(limitimer_uart_fd, frame, frame_len) < 0) {
-                    fprintf(stderr, "pitg-gpio: UART write failed: %s\n", strerror(errno));
+                    fprintf(stderr, "pitg-gpio: UART write error (seq=%u packets_sent=%lu): %s\n",
+                            (unsigned)seq, packets_sent, strerror(errno));
                     break;
                 }
             } else if (out_lt.req) {
@@ -623,12 +627,14 @@ int main(int argc, char **argv)
         if (oneshot)
             break;
 
+        packets_sent++;
         seq++;
         if (g_reset) {
             elapsed = 0;
             accum_ms = 0;
             g_paused = 0;
             g_reset = 0;
+            fprintf(stderr, "pitg-gpio: timer reset (packets_sent=%lu)\n", packets_sent);
         }
         if (!g_paused) {
             accum_ms += interval_ms;
@@ -638,6 +644,19 @@ int main(int argc, char **argv)
                 if (elapsed >= total_seconds)
                     elapsed = 0; /* loop back to start */
             }
+        }
+
+        /* Periodic status log */
+        status_accum_ms += interval_ms;
+        if (status_accum_ms >= status_interval_ms) {
+            status_accum_ms -= status_interval_ms;
+            int remaining = total_seconds - elapsed;
+            fprintf(stderr,
+                    "pitg-gpio: status seq=%u elapsed=%d remaining=%d:%02d "
+                    "packets_sent=%lu paused=%d\n",
+                    (unsigned)seq, elapsed,
+                    remaining / 60, remaining % 60,
+                    packets_sent, (int)g_paused);
         }
 
         /* Advance deadline by interval_ms; sleep until that absolute time.
