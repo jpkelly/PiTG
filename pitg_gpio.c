@@ -514,10 +514,6 @@ int main(int argc, char **argv)
     }
 
     long bit_ns = 1000000000L / baud;
-    struct timespec interval = {
-        .tv_sec = interval_ms / 1000,
-        .tv_nsec = (interval_ms % 1000) * 1000000L,
-    };
 
     signal(SIGINT,  on_signal);
     signal(SIGTERM, on_signal);
@@ -593,6 +589,9 @@ int main(int argc, char **argv)
         uint8_t seq = 0;
         int elapsed = 0;
         long accum_ms = 0;
+        struct timespec next;
+        clock_gettime(CLOCK_MONOTONIC, &next);
+
     while (g_running) {
         uint8_t frame[64];
         size_t frame_len = 0;
@@ -641,7 +640,14 @@ int main(int argc, char **argv)
             }
         }
 
-        nanosleep(&interval, NULL);
+        /* Advance deadline by interval_ms; sleep until that absolute time.
+         * This keeps the period accurate even if write_all stalls. */
+        next.tv_nsec += (long)interval_ms * 1000000L;
+        if (next.tv_nsec >= 1000000000L) {
+            next.tv_nsec -= 1000000000L;
+            next.tv_sec++;
+        }
+        clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &next, NULL);
     }
     }
 
