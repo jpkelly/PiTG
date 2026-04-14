@@ -62,7 +62,7 @@ static void usage(const char *prog)
 {
     fprintf(stderr,
             "Usage: %s [-N next_gpio] [-P prev_gpio] [-S serial_dev]\n"
-            "          [-B baud] [-D debounce_ms] [-c chip_index] [-H]\n"
+            "          [-B baud] [-D debounce_ms] [-c chip_index] [-H] [-T]\n"
             "\n"
             "  -N  GPIO input pin for NEXT button (default: 23)\n"
             "  -P  GPIO input pin for PREV button (default: 24)\n"
@@ -70,7 +70,8 @@ static void usage(const char *prog)
             "  -B  baud rate (default: 19200)\n"
             "  -D  debounce time in ms (default: 120)\n"
             "  -c  GPIO chip index (default: 0 -> /dev/gpiochip0)\n"
-            "  -H  buttons are active-high (default is active-low)\n",
+            "  -H  buttons are active-high (default is active-low)\n"
+            "  -T  test mode: auto-fire next/prev alternating every 10s\n",
             prog);
 }
 
@@ -201,9 +202,10 @@ int main(int argc, char **argv)
         .active_high = 0,
         .serial_dev = DEFAULT_SERIAL,
     };
+    int test_mode = 0;
 
     int c;
-    while ((c = getopt(argc, argv, "N:P:S:B:D:c:Hh")) != -1) {
+    while ((c = getopt(argc, argv, "N:P:S:B:D:c:HTh")) != -1) {
         switch (c) {
         case 'N':
             opt.next_gpio = parse_int_arg(optarg, 0, 53);
@@ -230,6 +232,9 @@ int main(int argc, char **argv)
             break;
         case 'H':
             opt.active_high = 1;
+            break;
+        case 'T':
+            test_mode = 1;
             break;
         case 'h':
             usage(argv[0]);
@@ -279,11 +284,17 @@ int main(int argc, char **argv)
     int prev_prev_state = gpiod_line_request_get_value(req_prev, (unsigned int)opt.prev_gpio);
 
     fprintf(stderr,
-            "pitg-cue-buttons: serial=%s baud=%d next=%d prev=%d debounce=%dms active_%s\n",
+            "pitg-cue-buttons: serial=%s baud=%d next=%d prev=%d debounce=%dms active_%s%s\n",
             opt.serial_dev, opt.baud,
             opt.next_gpio, opt.prev_gpio,
             opt.debounce_ms,
-            opt.active_high ? "high" : "low");
+            opt.active_high ? "high" : "low",
+            test_mode ? " TEST" : "");
+    if (test_mode)
+        fprintf(stderr, "pitg-cue-buttons: test mode: auto-fire every 10s (next/prev alternating)\n");
+
+    long last_test_fire = now_ms();
+    int test_toggle = 0; /* 0=next, 1=prev */
 
     while (g_running) {
         int next_state = gpiod_line_request_get_value(req_next, (unsigned int)opt.next_gpio);
@@ -314,6 +325,20 @@ int main(int argc, char **argv)
 
         prev_next_state = next_state;
         prev_prev_state = prev_state;
+
+        /* Test mode: auto-fire every 10s, alternating next/prev */
+        if (test_mode) {
+            long now = now_ms();
+            if (now - last_test_fire >= 10000L) {
+                last_test_fire = now;
+                uint8_t byte = test_toggle ? 0x1F : 0x0F;
+                if (send_cue(serial_fd, byte) == 0) {
+                    fprintf(stderr, "pitg-cue-buttons: TEST auto-fire %s -> 0x%02X\n",
+                            test_toggle ? "prev" : "next", byte);
+                }
+                test_toggle = !test_toggle;
+            }
+        }
 
         usleep(5000);
     }

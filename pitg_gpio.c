@@ -86,7 +86,7 @@ static void usage(const char *prog)
 {
     fprintf(stderr,
             "Usage: %s [-p protocol] [-u limitimer_uart] [-g limitimer_gpio] [-q perfectcue_gpio]\n"
-            "          [-x pc_cmd] [-b baud] [-i interval_ms] [-c chip_index] [-t total] [-1]\\n\n"
+            "          [-x pc_cmd] [-b baud] [-i interval_ms] [-c chip_index] [-t total] [-T] [-1]\n"
             "  -p  protocol: limitimer | perfectcue | both (default: both)\n"
             "  -u  UART device for limitimer output (example: /dev/ttyAMA0)\n"
             "  -g  GPIO pin for limitimer output (default: 17)\n"
@@ -96,6 +96,7 @@ static void usage(const char *prog)
             "  -i  frame interval in milliseconds (default: 1000)\n"
             "  -c  GPIO chip index (default: 0 -> /dev/gpiochip0)\n"
             "  -t  countdown total time as MM:SS or seconds (default: 10:00)\n"
+            "  -T  test mode: auto-fire PerfectCue every 10s, alternating next/prev\n"
             "  -1  oneshot: send one frame/event and exit\n"
             "Signals: SIGUSR1 = toggle pause/resume, SIGUSR2 = reset to start\n",
             prog);
@@ -423,10 +424,11 @@ int main(int argc, char **argv)
     int total_seconds = DEFAULT_TOTAL_SECONDS;
     int sumup_seconds = DEFAULT_SUMUP_SECONDS;
     int oneshot = 0;
+    int test_mode = 0;
     perfectcue_cmd_t pc_cmd = PC_NEXT;
     int opt;
 
-    while ((opt = getopt(argc, argv, "p:u:g:q:x:b:i:c:t:1h")) != -1) {
+    while ((opt = getopt(argc, argv, "p:u:g:q:x:b:i:c:t:T1h")) != -1) {
         switch (opt) {
         case 'p': {
             protocol_mode_t p = parse_protocol(optarg);
@@ -492,6 +494,9 @@ int main(int argc, char **argv)
             if (sumup_seconds >= total_seconds)
                 sumup_seconds = total_seconds > 60 ? 60 : total_seconds / 2;
             break;
+        case 'T':
+            test_mode = 1;
+            break;
         case '1':
             oneshot = 1;
             break;
@@ -544,7 +549,7 @@ int main(int argc, char **argv)
     gpio_output_t out_pc = {0};
     int limitimer_uart_fd = -1;
     int need_limitimer = (protocol == PROTO_LIMITIMER || protocol == PROTO_BOTH);
-    int need_perfectcue = (protocol == PROTO_PERFECTCUE || protocol == PROTO_BOTH);
+    int need_perfectcue = (protocol == PROTO_PERFECTCUE || protocol == PROTO_BOTH) || test_mode;
     int need_limitimer_gpio = need_limitimer && (limitimer_uart == NULL);
     int need_any_gpio = need_limitimer_gpio || need_perfectcue;
 
@@ -603,6 +608,8 @@ int main(int argc, char **argv)
         fprintf(stderr, "pitg-gpio: limitimer total=%d:%02d sumup=%d:%02d\n",
                 total_seconds / 60, total_seconds % 60,
                 sumup_seconds / 60, sumup_seconds % 60);
+    if (test_mode)
+        fprintf(stderr, "pitg-gpio: test mode enabled: PerfectCue auto-fire every 10s (next/prev alternating)\n");
 
     {
         uint8_t seq = 0;
@@ -611,6 +618,9 @@ int main(int argc, char **argv)
         unsigned long packets_sent = 0;
         long status_accum_ms = 0;
         const long status_interval_ms = 60000; /* log status every 60s */
+        long test_pc_accum_ms = 0;
+        const long test_pc_interval_ms = 10000; /* fire PerfectCue every 10s in test mode */
+        int test_pc_toggle = 0; /* 0=next, 1=prev */
         struct timespec next;
         clock_gettime(CLOCK_MONOTONIC, &next);
 
@@ -637,7 +647,7 @@ int main(int argc, char **argv)
             }
         }
 
-        if (out_pc.req) {
+        if (out_pc.req && !test_mode) {
             frame[0] = perfectcue_command_byte(pc_cmd);
             if (uart_send_bytes(&out_pc, frame, 1, bit_ns) < 0)
                 break;
@@ -662,6 +672,22 @@ int main(int argc, char **argv)
                 elapsed++;
                 if (elapsed >= total_seconds)
                     elapsed = 0; /* loop back to start */
+            }
+        }
+
+        /* Test mode: auto-fire PerfectCue every 10s, alternating next/prev */
+        if (test_mode && out_pc.req) {
+            test_pc_accum_ms += interval_ms;
+            if (test_pc_accum_ms >= test_pc_interval_ms) {
+                test_pc_accum_ms -= test_pc_interval_ms;
+                perfectcue_cmd_t fire_cmd = test_pc_toggle ? PC_PREV : PC_NEXT;
+                uint8_t pc_frame[1];
+                pc_frame[0] = perfectcue_command_byte(fire_cmd);
+                fprintf(stderr, "pitg-gpio: test mode firing PerfectCue %s\n",
+                        test_pc_toggle ? "prev" : "next");
+                if (uart_send_bytes(&out_pc, pc_frame, 1, bit_ns) < 0)
+                    break;
+                test_pc_toggle = !test_pc_toggle;
             }
         }
 
