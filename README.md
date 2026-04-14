@@ -1,49 +1,43 @@
 # PiTG
 
-PiTG is a Raspberry Pi 1 focused timecode/protocol toolkit.
+PiTG is a Raspberry Pi 1 timecode and protocol bridge. It provides three runtime outputs:
 
-It now contains two runtime outputs:
+- **`pitg`** — SMPTE LTC over analog audio (3.5mm jack) via ALSA + libltc
+- **`pitg-gpio`** — Limitimer protocol stream over hardware UART or GPIO bit-bang
+- **`pitg-cue-buttons`** — PerfectCue cue button bridge via USB RS-485 adapter with hardware button inputs
 
-- `pitg`: SMPTE LTC over analog audio (3.5mm jack) using ALSA + libltc
-- `pitg-gpio`: Limitimer/PerfectCue protocol output with split transport support
+The Limitimer and PerfectCue paths operate on separate serial devices and run simultaneously.
 
 ## Table of Contents
 
-- [Plan of Action (Wiring)](#plan-of-action-wiring)
-- [Why This Fork](#why-this-fork)
+- [Overview](#overview)
 - [Requirements](#requirements)
 - [Build](#build)
-- [1) LTC Audio Generator (`pitg`)](#1-ltc-audio-generator-pitg)
-- [2) Protocol Output (`pitg-gpio`)](#2-protocol-output-pitg-gpio)
-- [Recommended Split (Limitimer Critical, PerfectCue Occasional)](#recommended-split-limitimer-critical-perfectcue-occasional)
-- [Current Deployed USB Configuration](#current-deployed-usb-configuration)
-- [Raspberry Pi 1 Wiring (Split Mode)](#raspberry-pi-1-wiring-split-mode)
+- [Binaries](#binaries)
+  - [LTC Audio Generator (`pitg`)](#ltc-audio-generator-pitg)
+  - [Protocol Output (`pitg-gpio`)](#protocol-output-pitg-gpio)
+  - [Cue Button Bridge (`pitg-cue-buttons`)](#cue-button-bridge-pitg-cue-buttons)
+- [Deployed Configuration](#deployed-configuration)
+- [Raspberry Pi 1 Wiring](#raspberry-pi-1-wiring)
+  - [Pin Map](#pin-map)
   - [RS-485 Board Connections](#rs-485-board-connections)
-  - [RJ45 Connector Wiring (Limitimer / PerfectCue)](#rj45-connector-wiring-limitimer--perfectcue)
-  - [Wiring Diagram (with Buttons)](#wiring-diagram-with-buttons)
+  - [RJ45 Connector Wiring](#rj45-connector-wiring)
+  - [Wiring Diagram](#wiring-diagram)
   - [Pin 13 Ambiguity (Pi 1)](#pin-13-ambiguity-pi-1)
-- [Wiring Verification (Debug First)](#wiring-verification-debug-first)
-- [Protocol Payload Templates](#protocol-payload-templates)
-- [Install And Enable Services](#install-and-enable-services)
+- [Wiring Verification](#wiring-verification)
+- [Protocol Reference](#protocol-reference)
+- [Service Installation](#service-installation)
 - [Service Configuration](#service-configuration)
 - [Harness Helper](#harness-helper)
 - [Notes For Raspberry Pi 1](#notes-for-raspberry-pi-1)
 
-## Plan of Action (Wiring)
+## Overview
 
-1. Limitimer path: pin 8 (GPIO14/TXD0) -> RS-485 DI, plus GND, then A/B to Limitimer.
-2. PerfectCue path: pin 12 (GPIO18) -> RS-485 DI, plus GND, then A/B to PerfectCue.
-3. Buttons: NEXT pin 16 (GPIO23) to GND, PREV pin 18 (GPIO24) to GND.
-4. Manual DE/RE boards: set DE=HIGH and RE=HIGH (TX-only).
-5. Start and check: `sudo pitg-harnessctl status`.
-6. Test order: confirm Limitimer stream, then press NEXT/PREV and verify cue reception.
-7. If no comms: swap A/B, confirm `19200 8N1`, recheck shared ground and termination.
+PiTG runs on a Raspberry Pi 1 Model B (Rev 2, BCM2835, 26-pin header). It bridges between a timecode source and two DSAN protocol bus devices:
 
-## Why This Fork
-
-You asked for a project fork that can output both Limitimer protocol and PerfectCue protocol on Raspberry Pi 1.
-
-This repository now ships that GPIO path in a separate binary so your existing LTC audio workflow stays intact.
+- **Limitimer** receives a continuous status stream over RS-485 at 19200 baud, driven from the Pi's hardware UART (`/dev/ttyAMA0` → HW-0519 auto-direction board).
+- **PerfectCue** receives one-shot cue commands over RS-485 at 19200 baud, driven by `pitg-cue-buttons` via a Waveshare USB-TO-RS485(B) adapter (CH343G + SP485EEN, with hardware TNOW-based direction control).
+- **Buttons** (NEXT/PREV) are wired to GPIO inputs and drive PerfectCue events when pressed.
 
 ## Requirements
 
@@ -74,7 +68,11 @@ Build outputs:
 - `pitg-harnessctl`
 - `pitg-cue-buttons`
 
-## 1) LTC Audio Generator (`pitg`)
+## Binaries
+
+### LTC Audio Generator (`pitg`)
+
+Generates SMPTE LTC timecode signal over the Pi's 3.5mm analog audio jack via ALSA.
 
 Run with defaults:
 
@@ -95,12 +93,9 @@ Example:
 ./pitg -r 25 -a 48000 -d plughw:CARD=Headphones,DEV=0
 ```
 
-## 2) Protocol Output (`pitg-gpio`)
+### Protocol Output (`pitg-gpio`)
 
-`pitg-gpio` supports two transport paths:
-
-- Limitimer over hardware UART (`-u /dev/ttyAMA0` recommended on Pi 1)
-- PerfectCue over GPIO bit-banged serial using libgpiod
+Outputs a Limitimer protocol stream and/or single PerfectCue cue commands.
 
 Supported protocol modes:
 
@@ -125,26 +120,47 @@ CLI options:
 - `-i <ms>`: transmission interval in ms (default: `1000`)
 - `-c <index>`: gpiochip index (default: `0`)
 - `-t <MM:SS|seconds>`: countdown total time (default: `10:00`)
-- `-T`: test mode for the PerfectCue output path; auto-fires every 10 seconds alternating next/prev
+- `-T`: test mode — auto-fires every 10 seconds alternating next/prev
 - `-1`: one-shot mode (send one event/frame and exit)
 
 Examples:
 
 ```bash
 ./pitg-gpio -p limitimer -u /dev/ttyAMA0 -b 19200 -i 250
-./pitg-gpio -p perfectcue -q 18 -x next -b 19200 -i 250
+./pitg-gpio -p perfectcue -q 18 -x next -b 19200 -1
 ./pitg-gpio -p both -u /dev/ttyAMA0 -q 18 -x blank-on -b 19200 -i 250
 ./pitg-gpio -p perfectcue -q 18 -x blank-on -b 19200 -1
 ```
 
-## Recommended Split (Limitimer Critical, PerfectCue Occasional)
+### Cue Button Bridge (`pitg-cue-buttons`)
 
-If Limitimer is the primary stream and PerfectCue is occasional, run them separately:
+Monitors hardware button inputs (GPIO) and fires PerfectCue commands over a USB RS-485 adapter when pressed.
 
-1. Continuous service for Limitimer only.
-2. Fire PerfectCue events as one-shot commands when needed.
+CLI options:
 
-Example service options for the current split deployment:
+- `-N <gpio>`: NEXT button GPIO (default: `23`)
+- `-P <gpio>`: PREV button GPIO (default: `24`)
+- `-S <tty>`: USB RS-485 serial device
+- `-B <baud>`: baud rate (default: `19200`)
+- `-D <ms>`: debounce delay in ms (default: `120`)
+- `-c <index>`: gpiochip index (default: `0`)
+- `-H`: active-high button logic (default: active-low, contacts to GND)
+- `-T`: test mode — auto-fires every 10 seconds alternating next/prev
+
+## Deployed Configuration
+
+The deployed system on PiTG uses stable udev symlinks for the USB serial adapters:
+
+- `/dev/ttyLimitimer` → Limitimer output for `pitg-gpio`
+- `/dev/ttyRS485` → PerfectCue RS-485 output for `pitg-cue-buttons`
+
+The receiver (`piclocktg`, a Pi 5) receives the Limitimer stream on `/dev/ttyAMA1` (GPIO0/GPIO1). Clock configuration is at:
+
+```
+/boot/firmware/piclock/clock.ini
+```
+
+Recommended service options:
 
 ```bash
 PITG_GPIO_OPTS="-p limitimer -u /dev/ttyLimitimer -b 19200 -i 250 -c 0 -t 10:00"
@@ -153,61 +169,43 @@ PITG_CUE_BUTTONS_OPTS="-N 23 -P 24 -S /dev/ttyRS485 -B 19200 -D 120 -c 0 -T"
 
 Notes:
 
-- `pitg-gpio.service` should stay in Limitimer-only mode.
-- `pitg-cue-buttons.service` is the correct place to enable `-T` test mode for automatic PerfectCue clicks.
+- `pitg-gpio.service` runs in Limitimer-only mode continuously.
+- `pitg-cue-buttons.service` handles PerfectCue events via hardware buttons; `-T` enables automatic test firing on boot.
 - Remove `-T` from `pitg-cue-buttons` for live show operation.
 
-## Current Deployed USB Configuration
+## Raspberry Pi 1 Wiring
 
-Current working setup on PiTG uses two USB serial adapters with stable udev names:
+Recommended configuration for Pi 1 Model B Rev 2 (26-pin header):
 
-- `/dev/ttyLimitimer` -> Limitimer output for `pitg-gpio`
-- `/dev/ttyRS485` -> PerfectCue RS-485 output for `pitg-cue-buttons`
+- Limitimer stream: hardware UART (`/dev/ttyAMA0`) → RS-485 transceiver #1
+- PerfectCue events: USB RS-485 adapter (`pitg-cue-buttons`) → RS-485 transceiver #2
 
-On the receiver side (`piclocktg`), the clock configuration file is:
+![Raspberry Pi 1 Model B Rev 2 pinout](rpi-pinout.png)
 
-```bash
-/boot/firmware/piclock/clock.ini
-```
+### Pin Map
 
-This file controls Limitimer receive mode, the serial ports used by clock8002, and the warning/end colors.
+Physical pin numbers (26-pin header):
 
-Example occasional PerfectCue commands:
-
-```bash
-./pitg-gpio -p perfectcue -q 18 -x next -b 19200 -1
-./pitg-gpio -p perfectcue -q 18 -x prev -b 19200 -1
-./pitg-gpio -p perfectcue -q 18 -x blank-on -b 19200 -1
-./pitg-gpio -p perfectcue -q 18 -x blank-off -b 19200 -1
-```
-
-## Raspberry Pi 1 Wiring (Split Mode)
-
-Recommended on Pi 1:
-
-- Limitimer stream on hardware UART (`/dev/ttyAMA0`) through RS-485 transceiver #1
-- PerfectCue occasional events on GPIO through RS-485 transceiver #2
-
-Pin map (40-pin header numbering):
-
-- UART TXD0: BCM `GPIO14`, physical pin `8` -> Limitimer transceiver DI
-- UART RXD0: BCM `GPIO15`, physical pin `10` (optional for TX-only)
-- PerfectCue TX GPIO: BCM `GPIO18`, physical pin `12` -> PerfectCue transceiver DI
-- PerfectCue NEXT button input: BCM `GPIO23`, physical pin `16`
-- PerfectCue PREV button input: BCM `GPIO24`, physical pin `18`
-- Ground: physical pin `6` (or any GND)
+| Signal | BCM GPIO | Physical Pin |
+|---|---|---|
+| UART TXD0 (Limitimer) | GPIO14 | 8 |
+| UART RXD0 (optional) | GPIO15 | 10 |
+| PerfectCue TX (GPIO) | GPIO18 | 12 |
+| NEXT button input | GPIO23 | 16 |
+| PREV button input | GPIO24 | 18 |
+| Ground | — | 6 |
 
 Button wiring (default active-low):
 
-- One side of each momentary button -> GPIO input pin (`GPIO23` or `GPIO24`)
-- Other side of each button -> GND
-- No external pull-up resistors needed — `pitg-cue-buttons` enables the Pi's internal pull-up via libgpiod
-- If your buttons are wired active-high, run `pitg-cue-buttons` with `-H`
+- One side of each momentary button → GPIO input pin (`GPIO23` or `GPIO24`)
+- Other side of each button → GND
+- No external pull-up resistors needed — `pitg-cue-buttons` enables internal pull-ups via libgpiod
+- If buttons are wired active-high, use `-H`
 
 RS-485 line side:
 
-- Transceiver #1 A/B -> Limitimer A/B
-- Transceiver #2 A/B -> PerfectCue A/B
+- Transceiver #1 A/B → Limitimer A/B
+- Transceiver #2 A/B → PerfectCue A/B
 
 ### RS-485 Board Connections
 
@@ -237,9 +235,9 @@ These boards auto-switch direction (no DE/RE wiring needed). Use 5V for VCC.
 | **B-** | RJ45 PerfectCue B pins (4 + 5) |
 | **接大地** | leave unconnected |
 
-### RJ45 Connector Wiring (Limitimer / PerfectCue)
+### RJ45 Connector Wiring
 
-Use this when building RJ45 breakout/cable adapters for DSAN bus devices. Each device gets its own RS-485 transceiver board and its own RJ45 cable. The pin routing below follows the reference diagram exactly.
+Use when building RJ45 breakout/cable adapters for DSAN bus devices. Each device gets its own RS-485 transceiver board and its own RJ45 cable.
 
 ```
   Limitimer RJ45              TTL→RS485          PerfectCue RJ45             TTL→RS485
@@ -256,11 +254,11 @@ Use this when building RJ45 breakout/cable adapters for DSAN bus devices. Each d
                           ttyAMA0                                        GPIO18
 ```
 
-Pin groups shown in the diagram:
+Pin groups:
 - Limitimer socket: `3 + 6` to `A (+)`, and `4 + 5` to `B (-)`.
 - PerfectCue socket: `2 + 7` to `A (+)`, and `4 + 5` to `B (-)`.
 
-### Wiring Diagram (with Buttons)
+### Wiring Diagram
 
 ```mermaid
 flowchart TB
@@ -323,32 +321,31 @@ flowchart TB
 
 ### Pin 13 Ambiguity (Pi 1)
 
-Early Raspberry Pi board revisions mapped physical pin 13 differently (`GPIO21` on rev1 boards, `GPIO27` on later revisions). To avoid this ambiguity, use physical pin 12 (`GPIO18`) for PerfectCue output.
+Early Raspberry Pi board revisions mapped physical pin 13 differently (`GPIO21` on rev1 boards, `GPIO27` on later revisions). Use physical pin 12 (`GPIO18`) for PerfectCue output to avoid this ambiguity.
 
 References:
 
 - Raspberry Pi pinout with rev1/rev2 notes: https://pinout.xyz/pinout/pin13_gpio27
 - Raspberry Pi GPIO basics and board docs: https://www.raspberrypi.com/documentation/computers/raspberry-pi.html
 
-Check your board revision on-device:
+Check board revision:
 
 ```bash
 cat /proc/cpuinfo | grep Revision
 ```
 
-## Wiring Verification (Debug First)
+## Wiring Verification
 
-Treat the wiring diagram as a starting hypothesis and verify on hardware.
+Start with one link at a time (Limitimer first, then PerfectCue), and verify on hardware:
 
-1. Start with one link at a time (Limitimer first, then PerfectCue).
-2. Confirm UART TX is active on Pi pin 8 while Limitimer stream is running.
-3. Confirm PerfectCue GPIO pin toggles only when one-shot command is sent.
-4. If there is no communication, swap A/B on that specific RS-485 link.
-5. For manual DE/RE boards, force TX-only (`DE=HIGH`, `RE=HIGH`).
-6. Verify `19200 8N1` on both sides.
-7. Add/confirm 120 ohm termination only at bus ends.
+1. Confirm UART TX is active on Pi pin 8 while the Limitimer stream is running.
+2. Confirm the PerfectCue GPIO pin toggles only when a one-shot command is sent.
+3. If there is no communication, swap A/B on that specific RS-485 link.
+4. For manual DE/RE boards, force TX-only (`DE=HIGH`, `RE=HIGH`).
+5. Verify `19200 8N1` on both sides.
+6. Add/confirm 120 ohm termination only at bus ends.
 
-Recommended quick debug commands:
+Quick debug commands:
 
 ```bash
 # Limitimer continuous stream over UART
@@ -361,31 +358,23 @@ Recommended quick debug commands:
 ./pitg-gpio -p perfectcue -q 18 -x blank-off -b 19200 -1
 ```
 
-## Protocol Payload Templates
+## Protocol Reference
 
-Current implementation uses reverse-engineered protocol framing from the
-`Depili/limitimer` and `clock8002` references:
+- **Limitimer**
+  - Transport: RS-485, `19200 8N1`
+  - Packet framing: starts `0x81`, payload bytes use 7-bit values, checksum marker `0x83`, CRC16/Modbus (2 bytes), end `0xFF`
+  - Status packet type `0x00`, 55-byte packet generated by `build_limitimer_status_packet()` in `pitg_gpio.c`
+- **PerfectCue**
+  - Transport: `19200 8N1`
+  - Single-byte commands:
+    - `0x0F` next/right
+    - `0x1F` previous/left
+    - `0x2F` blank off
+    - `0x3F` blank on
 
-- Limitimer:
-	- Transport: RS-485, `19200 8N1`
-	- Packet framing: starts `0x81`, payload bytes use 7-bit values,
-		checksum marker `0x83`, CRC16/Modbus (2 bytes), end `0xFF`
-	- Status packet type `0x00`, 55-byte packet generated by
-		`build_limitimer_status_packet()` in `pitg_gpio.c`
-- PerfectCue:
-	- Transport: `19200 8N1`
-	- Commands emitted as one-byte events:
-		- `0x0F` next/right
-		- `0x1F` previous/left
-		- `0x2F` blank off
-		- `0x3F` blank on
+To modify packet behavior, edit `build_limitimer_status_packet()` or `perfectcue_command_byte()` in `pitg_gpio.c`.
 
-If your specific hardware revision needs different behavior, edit:
-
-- `build_limitimer_status_packet()` in `pitg_gpio.c`
-- `perfectcue_command_byte()` in `pitg_gpio.c`
-
-## Install And Enable Services
+## Service Installation
 
 Install binaries and service files:
 
@@ -415,57 +404,37 @@ This installs:
 
 ## Service Configuration
 
-LTC audio service config:
-
-- `/etc/default/pitg`
-
-Limitimer transmitter config:
-
-- `/etc/default/pitg-gpio`
-
-PerfectCue button bridge config:
-
-- `/etc/default/pitg-cue-buttons`
-
-Receiver clock config on `piclocktg`:
-
-- `/boot/firmware/piclock/clock.ini`
-
-Recommended current defaults:
-
-```bash
-PITG_GPIO_OPTS="-p limitimer -u /dev/ttyLimitimer -b 19200 -i 250 -c 0 -t 10:00"
-PITG_CUE_BUTTONS_OPTS="-N 23 -P 24 -S /dev/ttyRS485 -B 19200 -D 120 -c 0 -T"
-```
+| Service | Config file |
+|---|---|
+| LTC audio (`pitg`) | `/etc/default/pitg` |
+| Limitimer transmitter (`pitg-gpio`) | `/etc/default/pitg-gpio` |
+| PerfectCue button bridge (`pitg-cue-buttons`) | `/etc/default/pitg-cue-buttons` |
+| Receiver clock (`piclocktg`) | `/boot/firmware/piclock/clock.ini` |
 
 ### PerfectCue Contact Closure Controls
 
-Verified button/contact closure inputs for `pitg-cue-buttons` are:
+Verified button/contact closure inputs for `pitg-cue-buttons`:
 
 - NEXT: BCM `GPIO23`, physical pin `16`
 - PREV: BCM `GPIO24`, physical pin `18`
 - Both contacts close to `GND`
 - Default logic is active-low
-- Use `-H` only if your buttons/closures are wired active-high
+- Use `-H` only if contacts are wired active-high
 
 ### Test Mode
 
-- `-T` on `pitg-cue-buttons` enables automatic PerfectCue firing once every 10 seconds
-- It alternates `NEXT` then `PREV`
-- This is intended as the default boot test mode
-- For live use, remove `-T` and restart the service
+`-T` on `pitg-cue-buttons` enables automatic PerfectCue firing once every 10 seconds, alternating `NEXT` and `PREV`. This is the default boot test mode. Remove `-T` for live show operation.
 
-Restart after changes:
+Restart after config changes:
 
 ```bash
 sudo systemctl restart pitg-gpio.service
 sudo systemctl restart pitg-cue-buttons.service
-sudo systemctl restart clock8002
 ```
 
 ## Harness Helper
 
-`pitg-harnessctl` controls the full test harness (both services) and can send one-shot PerfectCue events.
+`pitg-harnessctl` controls both services and can send one-shot PerfectCue events:
 
 ```bash
 sudo pitg-harnessctl start
@@ -479,7 +448,9 @@ sudo pitg-harnessctl stop
 
 ## Notes For Raspberry Pi 1
 
-- Use physical GPIO level shifting/isolation if the destination system requires it.
-- Verify pin numbering against BCM GPIO numbers (the tool uses BCM indexes).
-- For protocol verification, check output with a logic analyzer or oscilloscope.
-- Pi 1 UART0 pins are GPIO14 (TXD0, pin 8) and GPIO15 (RXD0, pin 10).
+- Pi 1 UART0 pins: GPIO14 (TXD0, pin 8) and GPIO15 (RXD0, pin 10).
+- GPIO numbering follows BCM convention throughout.
+- The HW-0519 auto-direction RS-485 board is suitable for the Limitimer continuous stream. For isolated single-byte commands (PerfectCue), use a board with proper hardware direction control (e.g. Waveshare USB-TO-RS485(B) with TNOW).
+- If getting inverted data (e.g. `0x0F` received as `0x78`), swap the A/B wires.
+- For protocol verification, use a logic analyzer or oscilloscope on the RS-485 bus.
+- Use physical GPIO level shifting/isolation if the destination system requires 5V signaling.
