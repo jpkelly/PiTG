@@ -32,6 +32,8 @@
 static volatile sig_atomic_t g_running = 1;
 static volatile sig_atomic_t g_paused  = 0;
 static volatile sig_atomic_t g_reset   = 0;
+static volatile sig_atomic_t g_sigterm_pid = 0;
+static volatile sig_atomic_t g_sigterm_uid = 0;
 
 typedef enum {
     PROTO_LIMITIMER = 0,
@@ -54,6 +56,17 @@ typedef struct {
 static void on_signal(int sig)
 {
     (void)sig;
+    g_running = 0;
+}
+
+static void on_sigterm(int sig, siginfo_t *info, void *ctx)
+{
+    (void)sig;
+    (void)ctx;
+    if (info) {
+        g_sigterm_pid = (sig_atomic_t)info->si_pid;
+        g_sigterm_uid = (sig_atomic_t)info->si_uid;
+    }
     g_running = 0;
 }
 
@@ -228,7 +241,7 @@ static size_t build_limitimer_status_packet(uint8_t packet[55], uint8_t seq,
     packet[1] = 0x00;
     packet[2] = 0x00;
     packet[3] = config_low;
-    packet[4] = seq;
+    packet[4] = seq & 0x7F; /* payload bytes must be 7-bit (< 0x80); seq wraps 0-127 */
     packet[5] = 0x00; /* selected timer: program 1 */
 
     for (int i = 0; i < 4; i++) {
@@ -516,7 +529,13 @@ int main(int argc, char **argv)
     long bit_ns = 1000000000L / baud;
 
     signal(SIGINT,  on_signal);
-    signal(SIGTERM, on_signal);
+    {
+        struct sigaction sa;
+        sa.sa_sigaction = on_sigterm;
+        sigemptyset(&sa.sa_mask);
+        sa.sa_flags = SA_SIGINFO;
+        sigaction(SIGTERM, &sa, NULL);
+    }
     signal(SIGUSR1, on_pause);
     signal(SIGUSR2, on_reset);
 
@@ -683,6 +702,11 @@ int main(int argc, char **argv)
     if (limitimer_uart_fd >= 0)
         close(limitimer_uart_fd);
 
-    fprintf(stderr, "pitg-gpio: stopped\n");
+    if (g_sigterm_pid != 0) {
+        fprintf(stderr, "pitg-gpio: stopped by SIGTERM from pid=%d uid=%d\n",
+                (int)g_sigterm_pid, (int)g_sigterm_uid);
+    } else {
+        fprintf(stderr, "pitg-gpio: stopped\n");
+    }
     return 0;
 }
