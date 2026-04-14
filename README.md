@@ -16,6 +16,7 @@ It now contains two runtime outputs:
 - [1) LTC Audio Generator (`pitg`)](#1-ltc-audio-generator-pitg)
 - [2) Protocol Output (`pitg-gpio`)](#2-protocol-output-pitg-gpio)
 - [Recommended Split (Limitimer Critical, PerfectCue Occasional)](#recommended-split-limitimer-critical-perfectcue-occasional)
+- [Current Deployed USB Configuration](#current-deployed-usb-configuration)
 - [Raspberry Pi 1 Wiring (Split Mode)](#raspberry-pi-1-wiring-split-mode)
   - [RS-485 Board Connections](#rs-485-board-connections)
   - [RJ45 Connector Wiring (Limitimer / PerfectCue)](#rj45-connector-wiring-limitimer--perfectcue)
@@ -123,6 +124,8 @@ CLI options:
 - `-b <baud>`: UART/serial baud rate (default: `19200`)
 - `-i <ms>`: transmission interval in ms (default: `1000`)
 - `-c <index>`: gpiochip index (default: `0`)
+- `-t <MM:SS|seconds>`: countdown total time (default: `10:00`)
+- `-T`: test mode for the PerfectCue output path; auto-fires every 10 seconds alternating next/prev
 - `-1`: one-shot mode (send one event/frame and exit)
 
 Examples:
@@ -141,14 +144,33 @@ If Limitimer is the primary stream and PerfectCue is occasional, run them separa
 1. Continuous service for Limitimer only.
 2. Fire PerfectCue events as one-shot commands when needed.
 
-Example service options for Limitimer stream on Pi 1 UART:
+Example service options for the current split deployment:
 
 ```bash
-PITG_GPIO_OPTS="-p limitimer -u /dev/ttyAMA0 -b 19200 -i 250 -c 0"
+PITG_GPIO_OPTS="-p limitimer -u /dev/ttyLimitimer -b 19200 -i 250 -c 0 -t 10:00"
+PITG_CUE_BUTTONS_OPTS="-N 23 -P 24 -S /dev/ttyRS485 -B 19200 -D 120 -c 0 -T"
 ```
 
-When using `pitg-cue-buttons.service`, keep `pitg-gpio.service` in Limitimer-only mode
-so GPIO18 is not double-claimed.
+Notes:
+
+- `pitg-gpio.service` should stay in Limitimer-only mode.
+- `pitg-cue-buttons.service` is the correct place to enable `-T` test mode for automatic PerfectCue clicks.
+- Remove `-T` from `pitg-cue-buttons` for live show operation.
+
+## Current Deployed USB Configuration
+
+Current working setup on PiTG uses two USB serial adapters with stable udev names:
+
+- `/dev/ttyLimitimer` -> Limitimer output for `pitg-gpio`
+- `/dev/ttyRS485` -> PerfectCue RS-485 output for `pitg-cue-buttons`
+
+On the receiver side (`piclocktg`), the clock configuration file is:
+
+```bash
+/boot/firmware/piclock/clock.ini
+```
+
+This file controls Limitimer receive mode, the serial ports used by clock8002, and the warning/end colors.
 
 Example occasional PerfectCue commands:
 
@@ -397,20 +419,48 @@ LTC audio service config:
 
 - `/etc/default/pitg`
 
-GPIO protocol service config:
+Limitimer transmitter config:
 
 - `/etc/default/pitg-gpio`
 
-Default GPIO service options:
+PerfectCue button bridge config:
+
+- `/etc/default/pitg-cue-buttons`
+
+Receiver clock config on `piclocktg`:
+
+- `/boot/firmware/piclock/clock.ini`
+
+Recommended current defaults:
 
 ```bash
-PITG_GPIO_OPTS="-p limitimer -u /dev/ttyAMA0 -b 19200 -i 250 -c 0"
+PITG_GPIO_OPTS="-p limitimer -u /dev/ttyLimitimer -b 19200 -i 250 -c 0 -t 10:00"
+PITG_CUE_BUTTONS_OPTS="-N 23 -P 24 -S /dev/ttyRS485 -B 19200 -D 120 -c 0 -T"
 ```
+
+### PerfectCue Contact Closure Controls
+
+Verified button/contact closure inputs for `pitg-cue-buttons` are:
+
+- NEXT: BCM `GPIO23`, physical pin `16`
+- PREV: BCM `GPIO24`, physical pin `18`
+- Both contacts close to `GND`
+- Default logic is active-low
+- Use `-H` only if your buttons/closures are wired active-high
+
+### Test Mode
+
+- `-T` on `pitg-cue-buttons` enables automatic PerfectCue firing once every 10 seconds
+- It alternates `NEXT` then `PREV`
+- This is intended as the default boot test mode
+- For live use, remove `-T` and restart the service
 
 Restart after changes:
 
 ```bash
 sudo systemctl restart pitg-gpio.service
+sudo systemctl restart pitg-cue-buttons.service
+sudo systemctl restart clock8002
 ```
 
 ## Harness Helper
