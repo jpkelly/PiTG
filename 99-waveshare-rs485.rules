@@ -1,0 +1,1 @@
+SUBSYSTEM=="tty", ATTRS{serial}=="56C2086900", SYMLINK+="ttyRS485", MODE="0660", GROUP="dialout", TAG+="systemd", ENV{SYSTEMD_WANTS}+="pitg-cue-buttons.service"

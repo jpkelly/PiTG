@@ -46,9 +46,12 @@ install-service: $(TARGET) $(GPIO_TARGET) $(BTN_TARGET)
 	sudo install -m 644 pitg.service /etc/systemd/system/pitg.service
 	sudo install -m 644 pitg-gpio.service /etc/systemd/system/pitg-gpio.service
 	sudo install -m 644 pitg-cue-buttons.service /etc/systemd/system/pitg-cue-buttons.service
+	sudo install -m 644 99-waveshare-limitimer.rules /etc/udev/rules.d/99-waveshare-limitimer.rules
+	sudo install -m 644 99-waveshare-rs485.rules /etc/udev/rules.d/99-waveshare-rs485.rules
 	sudo sh -c 'test -f /etc/default/pitg || install -m 644 pitg.env.example /etc/default/pitg'
 	sudo sh -c 'test -f /etc/default/pitg-gpio || install -m 644 pitg-gpio.env.example /etc/default/pitg-gpio'
 	sudo sh -c 'test -f /etc/default/pitg-cue-buttons || install -m 644 pitg-cue-buttons.env.example /etc/default/pitg-cue-buttons'
+	sudo udevadm control --reload-rules
 	sudo systemctl daemon-reload
 
 enable-service:

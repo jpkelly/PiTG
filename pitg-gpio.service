@@ -1,6 +1,8 @@
 [Unit]
 Description=PiTG GPIO Protocol Transmitter
-After=multi-user.target
+After=multi-user.target dev-ttyLimitimer.device
+BindsTo=dev-ttyLimitimer.device
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple

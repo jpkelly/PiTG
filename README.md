@@ -149,10 +149,18 @@ CLI options:
 
 ## Deployed Configuration
 
-The deployed system on PiTG uses stable udev symlinks for the USB serial adapters:
+The deployed system on PiTG uses stable udev symlinks for the USB serial adapters, defined in
+`99-waveshare-limitimer.rules` and `99-waveshare-rs485.rules` (installed to `/etc/udev/rules.d/`
+by `make install-service`):
 
 - `/dev/ttyLimitimer` → Limitimer output for `pitg-gpio`
 - `/dev/ttyRS485` → PerfectCue RS-485 output for `pitg-cue-buttons`
+
+Both service units bind to their udev device unit (`BindsTo=`/`After=` on `dev-ttyLimitimer.device`
+and `dev-ttyRS485.device`) so they start as soon as the adapter enumerates rather than racing boot
+order, and stop cleanly if the adapter is unplugged. `StartLimitIntervalSec=0` disables systemd's
+restart-attempt limit so the service retries indefinitely instead of landing in `failed` if the
+adapter is slow to appear or briefly drops out.
 
 The receiver (`piclocktg`, a Pi 5) receives the Limitimer stream on `/dev/ttyAMA1` (GPIO0/GPIO1). Clock configuration is at:
 
